@@ -9,12 +9,12 @@ import { defaultQuizGenerationSettings, QuizGeneratorDialog, type QuizGeneration
 import { ThemeShuffleButton } from "@/components/studyos/ThemeSettings";
 import { useOptionalSourceAiActivity, useSourceAiActivity } from "@/contexts/SourceAiActivityContext";
 import { useWatchTimer } from "@/contexts/WatchTimerContext";
-import { buildAdaptiveMaterialContext, buildMaterialChunks, buildMaterialContextWithCitations, materialChunkDomId } from "@/lib/material-context";
+import { buildAdaptiveMaterialContext, buildMaterialChunks, materialChunkDomId } from "@/lib/material-context";
 import { trpc } from "@/lib/trpc";
 import type { Quiz, StudyCitation, StudySession, VocabItem, VocabReviewRating } from "@/lib/study-types";
-import { compactKeyTermText, formatDuration, isVocabularyDue, plainText, scoreQuiz, vocabularyDueAt } from "@/lib/study-utils";
+import { compactKeyTermText, isVocabularyDue, plainText, scoreQuiz, vocabularyDueAt } from "@/lib/study-utils";
 import { useStudyStore } from "@/store/useStudyStore";
-import { BookOpenText, ChevronLeft, ChevronRight, CircleHelp, Clock3, Compass, ExternalLink, FileText, FolderOpen, FolderPlus, GripVertical, Languages, Loader2, MessageCircleQuestion, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pause, Pin, Play, Plus, RotateCcw, Search, Send, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { BookOpenText, ChevronRight, Clock3, Compass, ExternalLink, FileText, FolderOpen, FolderPlus, Languages, Loader2, MessageCircleQuestion, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pause, Pin, Play, Plus, RotateCcw, Search, Send, Sparkles, Trash2, Upload, X } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { useLocation } from "wouter";
@@ -611,7 +611,6 @@ function HighlightedText({ text, terms }: { text: string; terms: string[] }) { c
 function PanelTitle({ title, icon }: { title: string; icon: React.ReactNode }) { return <div className="flex items-center gap-2 border-b border-border px-4 py-3"><span className="text-muted-foreground">{icon}</span><h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{title}</h2></div>; }
 function SectionHeader({ label, action }: { label: string; action?: React.ReactNode }) { return <div className="flex items-center justify-between"><h3 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</h3>{action}</div>; }
 function EmptyPanel({ text }: { text: string }) { return <div className="flex min-h-20 items-center justify-center p-4 text-center font-display text-sm italic leading-relaxed text-muted-foreground">{text}</div>; }
-function Pager({ page, pageCount, onChange, label = "Items" }: { page: number; pageCount: number; onChange: (page: number) => void; label?: string }) { if (label === "Key Terms") return null; return <div className="mt-3 flex justify-end gap-1"><button type="button" disabled={page === 0} onClick={() => onChange(page - 1)} aria-label={`Previous ${label} page`} className="study-pager"><ChevronLeft className="size-3.5" /></button><button type="button" disabled={page === pageCount - 1} onClick={() => onChange(page + 1)} aria-label={`Next ${label} page`} className="study-pager"><ChevronRight className="size-3.5" /></button></div>; }
 type SourceFocusTarget = { sessionId: string; materialId: string; ordinal: number };
 function materialContext(session: StudySession, query = "", responseStyle?: string) { return buildAdaptiveMaterialContext(session.materials, query, responseStyle); }
 function attachMaterialIds(session: StudySession, citations: Array<{ title: string; ordinal: number }>): StudyCitation[] { return citations.map((citation) => ({ ...citation, materialId: session.materials.find((material) => material.title === citation.title)?.id })); }

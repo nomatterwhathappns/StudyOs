@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { invokeGoogleGemini, toGoogleResponseSchema } from "./googleGemini";
 
+const runLiveGeminiCheck = process.env.RUN_GOOGLE_GEMINI_SECRET_TEST === "true";
+
 describe("Google Gemini API key", () => {
-  it.skipIf(!process.env.GOOGLE_GENERATIVE_AI_API_KEY)("can access the Gemini model catalog", async () => {
+  it.runIf(runLiveGeminiCheck)("can access the Gemini model catalog", async () => {
     const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     expect(key, "GOOGLE_GENERATIVE_AI_API_KEY must be configured").toBeTruthy();
 

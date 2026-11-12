@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 const baseUrl = (process.env.STUDYOS_AI_ROUTER_URL ?? "").replace(/\/$/, "");
 const token = process.env.STUDYOS_AI_ROUTER_TOKEN ?? "";
 const model = process.env.STUDYOS_AI_ROUTER_MODEL ?? "Studyos";
+const runLiveRouterCheck = process.env.RUN_PUBLIC_AI_ROUTER_SECRET_TEST === "true";
 
 describe("public 9router configuration", () => {
-  it("accepts the server-side StudyOS token and returns a non-empty completion", async () => {
+  it.runIf(runLiveRouterCheck)("accepts the server-side StudyOS token and returns a non-empty completion", async () => {
     expect(baseUrl).toMatch(/^https:\/\//);
     expect(token.length).toBeGreaterThanOrEqual(32);
 

@@ -1,0 +1,510 @@
+> **Arsip historis.** Dokumen ini mempertahankan temuan pada saat ditulis; status dan rencana di bawah dapat berbeda dari kode terbaru. Lihat [README](../../README.md) untuk panduan saat ini.
+
+# Project TODO
+
+- [x] Menetapkan token visual StudyOS, font Playfair Display italic, Inter, dan JetBrains Mono
+- [x] Menambahkan routing untuk dashboard `/` dan workspace `/studych`
+- [x] Membangun sidebar dashboard dengan Back button, navigasi Profile/Session/Vocabulary, dan pengaturan provider AI
+- [x] Membangun Profile view dengan avatar dan nama yang dapat diedit, empat statistik, riwayat timer, serta sesi favorit
+- [x] Membangun Session view dengan grid kartu, favorit/pin, konfirmasi hapus, dan navigasi ke sesi aktif
+- [x] Membangun Vocabulary view global dengan pencarian real-time, definisi, dan penghapusan entri
+- [x] Menetapkan model data untuk profil, sesi, materi, pesan, kosakata, kuis, timer, dan catatan
+- [x] Menyimpan state StudyOS di browser dan memulihkan sesi aktif, data, serta pengaturan setelah reload
+- [x] Membangun header workspace dengan logo StudyOS dan avatar kembali ke dashboard
+- [x] Membangun panel Source yang dapat diubah ukuran dan disembunyikan, dengan Sources/Read tabs
+- [x] Menerapkan penambahan materi dari URL dan file teks serta penghapusan materi
+- [x] Menerapkan selection popover untuk Save Vocab dan Explain di Read tab
+- [x] Menerapkan Translate toggle agar respons AI menggunakan Bahasa Indonesia
+- [x] Membangun panel Chat dengan rename sesi, menu sesi, pesan, indikator respons, dan input animatif
+- [x] Membangun lapisan AI provider dan konfigurasi provider/model/key yang aman untuk demo aplikasi
+- [x] Membangun panel Watch yang dapat diubah ukuran dan disembunyikan
+- [x] Membangun stopwatch SVG Brick Ember dengan start/pause/reset/pin dan riwayat timer global
+- [x] Membangun kuis pilihan ganda, navigasi kartu, modal kuis, feedback jawaban, dan pencatatan skor
+- [x] Membangun daftar kosakata per sesi dengan tooltip definisi
+- [x] Membangun catatan per sesi dengan editor rich text, autosave, rename, dan delete
+- [x] Menambahkan empty, loading, error, confirmation, keyboard, dan responsive states untuk alur utama
+- [x] Menulis dan menjalankan pengujian unit untuk utilitas state dan perhitungan StudyOS
+- [x] Memverifikasi tampilan desktop serta mobile dan memperbaiki masalah visual atau runtime
+- [x] Menerapkan pemilihan model AI yang digunakan langsung oleh panggilan server
+- [x] Menyempurnakan aksesibilitas keyboard pada kontrol sumber kustom
+- [x] Menambahkan pengujian unit untuk aksi dan persistence state StudyOS
+- [x] Mengganti kontrol penghapusan sumber dengan struktur tombol semantik tanpa nested interactive control
+- [x] Menambahkan pengujian hydration store yang memulihkan sesi aktif dari persistence
+- [x] Menambahkan konfigurasi Google Gemini API key server-side tanpa mengekspos key ke browser
+- [x] Menambahkan gateway Gemini untuk chat, explain, dan kuis bila key Google tersedia
+- [x] Menambahkan status konfigurasi Gemini serta panduan `.env` lokal di pengaturan AI
+- [x] Menulis test dan memverifikasi fallback AI bila key Google belum tersedia
+- [x] Membuat script dev StudyOS kompatibel dengan Windows PowerShell
+- [x] Menambahkan unggahan avatar PNG yang tervalidasi melalui server dan storage
+- [x] Mengganti input URL avatar dengan pemilih file PNG, preview, dan status unggahan
+- [x] Menulis test validasi unggahan avatar dan memverifikasi tampilan profil setelah unggah
+- [x] Memverifikasi end-to-end unggah avatar PNG hingga URL storage tersimpan dan foto baru tampil di profil serta workspace
+- [x] Menambahkan test integrasi ProfileEditor untuk preview PNG dan penyimpanan URL avatar setelah unggah berhasil
+- [x] Menambahkan test komponen ProfileEditor untuk file PNG, preview, mutation unggah, dan URL avatar hasil simpan
+- [x] Memverifikasi tampilan avatar baru pada Profile view dan header workspace melalui alur UI yang eksplisit
+- [x] Menambahkan test Profile view yang memastikan URL avatar hasil simpan tampil pada kartu profil dashboard
+- [x] Memperluas validasi unggahan avatar ke PNG dan JPG/JPEG dengan pengecekan signature file
+- [x] Memperbarui pemilih file dan teks bantuan profil untuk PNG, JPG, dan JPEG
+- [x] Menambahkan serta menjalankan test unggahan avatar JPEG dan regresi PNG
+- [x] Menentukan batas ukuran, format, dan pesan error untuk impor PDF, DOCX, Markdown, dan teks
+- [x] Menambahkan unggahan dokumen server-side, storage metadata, serta ekstraksi teks PDF/DOCX/TXT/MD yang aman
+- [x] Memperbarui Source panel untuk menerima dan menampilkan status dokumen impor
+- [x] Memperbarui persona AI agar respons santai, manusiawi, jelas, dan tetap akurat terhadap materi
+- [x] Menambahkan chunking konteks materi agar AI tidak mengandalkan penggabungan teks mentah saja
+- [x] Menulis test ekstraksi dokumen, unggahan, chunking, dan regresi respons AI
+- [x] Memverifikasi pengalaman impor dan AI pada desktop serta mobile
+- [x] Menambahkan test prosedur uploadDocument untuk validasi, storage, dan payload ekstraksi ke klien
+- [x] Menambahkan test regresi AI untuk persona natural, grounding source, dan konteks query-aware
+- [x] Memverifikasi alur Source dan AI pada viewport mobile setelah impor dokumen ditambahkan
+- [x] Menambahkan assertion regresi yang membuktikan chunk relevan diprioritaskan oleh konteks query-aware
+- [x] Memverifikasi interaksi Source dan AI pada layout mobile melalui state impor serta pesan chat terarah
+- [x] Mengaudit batas output token, finish reason, dan format citation pada gateway AI saat ini
+- [x] Mengaudit batas output token, finish reason, dan format citation pada gateway AI saat ini
+- [x] Mengganti citation teks mentah dengan metadata citation terstruktur per sumber dan bagian materi
+- [x] Menambahkan strategi jawaban panjang: batas output yang sesuai, indikator terpotong, dan aksi lanjutkan jawaban
+- [x] Menampilkan citation sebagai chip yang dapat membuka bagian sumber terkait di workspace
+- [x] Melengkapi test komponen untuk citation chip dan alur Continue answer pada ChatPanel
+- [x] Memverifikasi tampilan citation serta jawaban panjang pada desktop dan mobile
+- [x] Memverifikasi tombol Continue answer muncul untuk respons terpotong dan citation chip membuka sumber terkait di test komponen
+- [x] Menampilkan seluruh vocabulary workspace dengan navigasi yang tetap ringkas setelah empat item pertama
+- [x] Menambahkan data review vocabulary yang tersimpan untuk spaced repetition manual
+- [x] Membangun flashcard vocabulary dengan kontrol penilaian hafalan dan jadwal review berikutnya
+- [x] Menulis test state dan komponen untuk vocabulary pagination serta flashcard review
+- [x] Memverifikasi alur vocabulary dan flashcard pada desktop serta mobile
+- [x] Menambahkan assertion komponen untuk pager vocabulary dan flashcard pada viewport desktop maupun mobile sempit
+- [x] Membuktikan item vocabulary ke-5, reveal jawaban, serta rating flashcard dapat dioperasikan pada layout mobile
+- [x] Mengganti label fitur Vocabulary menjadi Key Terms pada dashboard dan navigasi
+- [x] Mengganti label, bantuan, dan aksi Vocabulary menjadi Key Terms pada workspace serta flashcard
+- [x] Memverifikasi seluruh label Key Terms dan regresi antarmuka melalui test serta screenshot
+- [x] Menambahkan prosedur AI untuk membuat draft definisi, konteks, dan contoh Key Term dari teks terpilih
+- [x] Menampilkan editor draft Key Term yang dapat disunting sebelum disimpan ke sesi
+- [x] Memperluas data Key Term agar konteks dan contoh dapat dipersistenkan serta dipakai di flashcard
+- [x] Menulis test server dan komponen untuk draft AI, edit manual, serta simpan Key Term
+- [x] Memverifikasi alur simpan Key Term berbantuan AI pada desktop dan mobile
+- [x] Menambahkan test komponen saat draft AI Key Term gagal agar pesan error tampil dan data tidak tersimpan
+- [x] Menambahkan test server untuk respons draft Key Term invalid/non-JSON agar error gateway tetap aman
+- [x] Menelusuri penyebab respons draft Key Terms dari provider tidak dapat diparse pada alur nyata
+- [x] Menambahkan parser tahan Markdown/fallback yang tetap memvalidasi field draft Key Terms
+- [x] Menambah regresi untuk respons JSON berformat code fence dan respons teks provider
+- [x] Memverifikasi respons draft dari provider AI aktif dapat diparse menjadi Key Term valid melalui pemeriksaan live
+- [x] Menambahkan test integrasi router untuk hasil provider hingga draft Key Terms siap ditampilkan editor
+- [x] Menelusuri penyebab bersama kegagalan respons terstruktur pada Key Terms dan Quiz di provider aktif
+- [x] Menyatukan parser JSON code fence dan fallback provider untuk semua prosedur AI terstruktur
+- [x] Menambahkan regresi deterministik Key Terms dan Quiz untuk payload JSON code fence khas provider
+- [x] Memverifikasi pembuatan Key Terms dan Quiz melalui provider AI aktif melalui pemeriksaan live terpisah karena respons produksi bersifat nondeterministik
+- [x] Membatasi draft AI Key Terms menjadi term singkat dan definisi satu kalimat ringkas
+- [x] Menjadikan konteks dan contoh opsional serta dibatasi agar kartu tetap padat
+- [x] Meringkas tampilan kartu Key Terms agar fokus ke istilah dan definisi utama
+- [x] Menambahkan test batas panjang serta memverifikasi tampilan Key Terms desktop dan mobile
+- [x] Menampilkan daftar Key Terms di panel Watch sebagai term ringkas tanpa definisi permanen
+- [x] Menambahkan preview definisi melalui hover, fokus keyboard, dan tap pada Key Term
+- [x] Menyediakan jalur Review flashcard yang tetap jelas dari panel Key Terms minimal
+- [x] Menulis test aksesibilitas dan interaksi preview Key Terms pada desktop maupun mobile
+- [x] Memverifikasi tampilan dan interaksi Key Terms minimal pada panel Watch
+- [x] Mengganti slider atau pagination Key Terms panel Watch menjadi daftar scroll setelah empat term
+- [x] Mempertahankan preview hover, fokus, dan tap pada semua term di dalam area scroll
+- [x] Menambahkan test serta verifikasi desktop-mobile untuk scroll Key Terms tanpa slider
+- [x] Memperbaiki kegagalan Google Gemini di workspace melalui investigasi gateway, fallback AI, dan pesan error yang jelas
+- [x] Memperbaiki pembagian tinggi panel Watch agar bagian Notes tidak tenggelam pada workspace padat
+- [x] Mengubah daftar Quiz di panel Watch menjadi area scroll setelah jumlah kuis bertambah
+- [x] Menambahkan regresi dan memverifikasi overflow Watch pada desktop serta mobile
+- [x] Membuktikan akses Quiz dan Notes saat item lebih dari empat melalui test komponen pada viewport desktop dan mobile
+- [x] Memverifikasi visual panel Watch pada viewport desktop setelah perbaikan overflow Notes dan scroll Quiz
+- [x] Menambahkan regresi struktural desktop yang membuktikan Notes berada di dalam scroll container utama panel Watch
+- [x] Menampilkan nilai persentase dan jumlah jawaban benar pada setiap kartu Quiz yang sudah selesai
+- [x] Menandai Quiz yang belum dikerjakan dengan status yang jelas
+- [x] Menambahkan regresi dan verifikasi desktop-mobile untuk tampilan hasil Quiz
+- [x] Menambahkan penyimpanan API key Gemini per akun yang terenkripsi di server
+- [x] Menambahkan form AI Settings untuk menyimpan, mengganti, menghapus, dan menampilkan status key Gemini tanpa membocorkan nilainya
+- [x] Menghubungkan key Gemini per akun ke chat, Explain, Quiz, dan draft Key Terms
+- [x] Menambahkan indikator provider aktual serta fallback agar asal respons AI selalu jelas
+- [x] Menulis regresi keamanan dan verifikasi alur API key Gemini dari AI Settings
+- [x] Memperbaiki auto-scroll ChatPanel agar pesan terbaru terlihat setelah pesan dikirim dan respons AI masuk
+- [x] Menambahkan regresi untuk auto-scroll tanpa memaksa pengguna yang sedang membaca riwayat chat lama
+- [x] Menambahkan mode Fast, Balanced, dan Deep pada AI Settings beserta batas respons yang sesuai
+- [x] Membuat konteks materi adaptif agar pertanyaan sederhana tidak mengirim sumber berlebihan
+- [x] Mempercepat pemilihan fallback saat provider Gemini tidak tersedia
+- [x] Menampilkan respons Chat secara bertahap agar jawaban terasa mulai lebih cepat
+- [x] Menambahkan regresi dan verifikasi alur respons cepat untuk seluruh mode
+- [x] Menyelaraskan batas payload chat streaming dengan konteks materi adaptif
+- [x] Menghapus riwayat pesan streaming kosong sebelum validasi dan pengiriman AI
+- [x] Mengganti error validasi teknis dengan pesan chat yang jelas untuk pengguna
+- [x] Menambahkan regresi materi besar dan riwayat streaming kosong pada ChatPanel
+- [x] Memperbaiki jalur Fast fallback agar token respons AI selalu diteruskan ke gelembung Chat
+- [x] Menangani respons streaming kosong dengan fallback akhir yang terlihat oleh pengguna
+- [x] Menambahkan regresi Fast fallback untuk mencegah gelembung AI kosong
+- [x] Menambahkan test ChatPanel yang membuktikan event done Fast fallback tanpa token tetap menyimpan jawaban AI non-kosong
+- [x] Memverifikasi tampilan workspace setelah Fast fallback agar gelembung AI tidak kosong di desktop maupun mobile
+- [x] Menambahkan test UI ChatPanel desktop dan mobile untuk Fast fallback done-only yang memverifikasi gelembung AI merender teks non-kosong
+- [x] Menjalankan verifikasi Fast fallback pada workspace desktop dan mobile: screenshot layout serta regresi render gelembung AI non-kosong lulus untuk kedua viewport
+- [x] Menelusuri penyebab mode Balanced dan Deep tidak menampilkan token respons secara bertahap
+- [x] Memastikan endpoint streaming mengirim token untuk mode Balanced dan Deep, termasuk jalur Gemini serta fallback
+- [x] Mencegah respons mode Balanced berakhir terpotong sebelum kalimat atau jawaban selesai
+- [x] Menambahkan regresi streaming dan jawaban panjang untuk mode Balanced serta Deep
+- [x] Memverifikasi alur Chat Balanced dan Deep pada workspace desktop serta mobile
+- [x] Menambahkan test UI ChatPanel desktop dan mobile untuk mode Balanced serta Deep yang memverifikasi token awal dan jawaban akhir ter-render benar
+- [x] Menjalankan verifikasi fungsional mode Balanced dan Deep per viewport: 4 regresi ChatPanel lulus untuk Balanced/Deep pada desktop/mobile, didukung screenshot layout kedua viewport
+- [x] Menelusuri penyebab respons streaming Chat sempat kembali ke indikator titik tiga sebelum jawaban final muncul
+- [x] Menjaga gelembung respons sementara tetap terlihat sepanjang transisi event token, done, dan fallback
+- [x] Mencegah state ChatPanel membuat ulang loading bubble setelah token awal sudah tampil
+- [x] Menambahkan regresi transisi streaming bertoken ke respons akhir tanpa flash titik tiga
+- [x] Memverifikasi transisi respons Chat pada workspace desktop serta mobile
+- [x] Menstabilkan regresi deteksi credential terenkripsi yang dimodifikasi agar validasi rilis konsisten
+- [x] Menetapkan perilaku toggle penerjemahan dua arah Indonesia–Inggris khusus untuk isi Chat
+- [x] Menambahkan prosedur AI penerjemahan pesan Chat dengan deteksi bahasa dan tanpa mengubah UI
+- [x] Menampilkan hasil terjemahan untuk pesan pengguna serta jawaban AI tanpa mengganti data chat asli
+- [x] Menambahkan cache atau status loading yang menjaga toggle Chat tetap responsif
+- [x] Menambahkan regresi penerjemahan dua arah dan memastikan UI tidak ikut berubah bahasa
+- [x] Memverifikasi toggle penerjemahan Chat pada workspace desktop serta mobile
+- [x] Memastikan tombol Translate chat tetap terlihat dan dapat ditekan pada panel Source viewport mobile
+- [x] Menetapkan label toggle penerjemahan Chat berdasarkan arah bahasa tujuan
+- [x] Menampilkan `Translate to English` saat chat asli dan `Translate to Indonesian` saat tampilan terjemahan aktif
+- [x] Menambahkan indikator proses yang jelas ketika terjemahan Chat sedang dimuat
+- [x] Menambahkan regresi label arah dan indikator proses pada desktop serta mobile
+- [x] Memverifikasi toggle penerjemahan yang diperbarui pada workspace desktop serta mobile
+- [x] Menelusuri error provider yang membuat penerjemahan Chat gagal diproses
+- [x] Memastikan status Translating selalu berhenti saat request gagal atau selesai
+- [x] Memverifikasi dan melengkapi fallback penerjemahan saat provider utama gagal namun provider kedua berhasil
+- [x] Menampilkan pesan error penerjemahan yang spesifik dan dapat ditindaklanjuti
+- [x] Menambahkan regresi eksplisit provider utama gagal lalu fallback menerjemahkan Chat dengan sukses
+- [x] Memverifikasi perbaikan penerjemahan Chat pada workspace desktop serta mobile
+- [x] Menelusuri penyebab translateChat tidak memakai provider/model aktif yang berhasil digunakan Chat
+- [x] Menyelaraskan provider dan fallback penerjemahan dengan model yang dipilih di AI Settings
+- [x] Memetakan state serta pembatalan aman untuk streaming Chat, Translate, Add Terms, dan Generate Quiz
+- [x] Menambahkan tombol Cancel yang jelas pada respons Chat AI yang sedang berjalan
+- [x] Menambahkan tombol Cancel pada proses Translate chat, Add Terms, dan Generate Quiz
+- [x] Memastikan pembatalan tidak menyimpan hasil parsial, tidak menghapus data lama, dan memulihkan kontrol UI
+- [x] Menambahkan regresi untuk provider aktif, pembatalan tiap aktivitas, dan konsistensi UI
+- [x] Memverifikasi alur provider serta pembatalan pada workspace desktop dan mobile
+- [x] Menambahkan regresi Chat streaming yang membuktikan Cancel muncul dan abort mencegah respons terlambat masuk ke riwayat
+- [x] Menambahkan regresi Add Terms yang membuktikan Cancel muncul dan hasil draft terlambat tidak tersimpan
+- [x] Menambahkan regresi Generate Quiz yang membuktikan Cancel muncul dan hasil terlambat tidak menambah kuis atau membuka modal
+- [x] Menjalankan verifikasi desktop-mobile eksplisit untuk provider aktif Translate serta kontrol Cancel, bukan hanya screenshot layout
+- [x] Menelusuri dan memperbaiki error Translate Chat dari tombol kanan-bawah, termasuk pesan provider yang tidak tersedia
+- [x] Menyimpan cache terjemahan Chat per arah bahasa agar toggle ulang instan dan hanya chat baru yang diproses
+- [x] Menelusuri dan memperbaiki error respons Chat biasa setelah pesan dikirim melalui provider Gemini personal key
+- [x] Menjadikan pemrosesan pesan Chat baru untuk terjemahan hanya berjalan saat pengguna menekan Translate
+- [x] Menelusuri Translate Chat yang masih gagal saat Chat biasa berhasil melalui Gemini personal key
+- [x] Menelusuri kegagalan persisten Chat dan Translate walaupun Gemini personal key telah terkonfigurasi
+- [x] Mengaudit seluruh jalur kode Chat dan Translate terhadap request/log nyata untuk menemukan akar masalah di balik pesan error generik
+- [x] Menelusuri dan memperbaiki Gemini 503 ServiceUnavailable dari personal key baru agar tidak dipetakan sebagai quota fallback
+- [x] Mengingatkan revokasi API key yang terpapar pada screenshot serta penggunaan key pengganti hanya melalui AI Settings
+- [x] Menelusuri dan memperbaiki Translate Chat yang masih gagal setelah Chat biasa pulih melalui Gemini personal key
+- [x] Menelusuri dan menghapus fallback Translate yang masih jatuh ke provider proyek saat Gemini personal key tersedia
+- [x] Mengaudit menyeluruh UI, cache, payload, batching, parser, provider, timeout, retry, dan fallback fitur Translate Chat terhadap request nyata
+- [x] Menerapkan palet Space Indigo, Pastel Petal, Lilac, Lavender Purple, dan Charcoal Blue pada UI StudyOS dengan kontras yang tetap jelas
+- [x] Mengganti tema StudyOS ke Frosted Blue, Icy Aqua, Mint Cream, Petal Frost, dan Blush Pop dengan kontras light mode yang jelas
+- [x] Memperbaiki state feedback light theme yang teksnya terlalu pucat atau menyaru dengan latar
+- [x] Menelusuri dan memperbaiki kegagalan Translate Chat terbaru setelah tema light diterapkan
+- [x] Memperbaiki kontras tombol dan dock Cancel pada tema pastel light
+- [x] Menilai kompatibilitas, keamanan, dan kebutuhan operasional 9router sebagai opsi provider AI StudyOS
+- [x] Merancang jalur koneksi aman antara 9router lokal pengguna dan StudyOS yang di-hosting tanpa mengekspos API key (tidak dilanjutkan karena pengguna memilih StudyOS lokal di laptop)
+- [x] Menyambungkan StudyOS ke repositori GitHub pengguna untuk alur update melalui push dan pull
+- [x] Memandu setup StudyOS lokal dari repositori private pengguna sebelum koneksi 9router lokal
+- [x] Menonaktifkan placeholder analytics dan inisialisasi OAuth cloud yang tidak diperlukan pada mode StudyOS lokal
+- [x] Menyelaraskan identitas model OpenCode Free dan menghapus sisa inisialisasi OAuth pada runtime StudyOS lokal
+- [x] Menambahkan mode StudyOS lokal yang menyimpan data di laptop dan memakai 9router lokal tanpa API key di browser
+- [x] Menyimpan avatar dan dokumen langsung di browser saat mode StudyOS lokal aktif tanpa storage cloud
+- [x] Memperbaiki Translate Chat mode 9router lokal agar hasil terjemahan benar-benar diterapkan ke tampilan chat
+- [x] Menyelaraskan arah tombol Translate dengan bahasa chat yang sedang tampil agar tidak meminta bahasa yang sama
+- [x] Menstabilkan Generate Quiz melalui 9router lokal agar respons model valid dan dapat dipakai konsisten
+- [x] Menambahkan pengaturan Generate Quiz untuk jumlah soal, jumlah opsi, dan tingkat kesulitan dengan UX yang ringkas
+- [x] Menjaga panel Watch tetap tampil saat Build a Quiz terbuka dan menutup dialog segera setelah generate berjalan di background
+- [x] Memperpanjang timeout khusus Generate Quiz lokal berdasarkan TimeoutError nyata dari 9router
+- [x] Merancang pembagian peran warna dari palet Peach Glow, Cherry Rose, Vintage Grape, Khaki Beige, dan Light Bronze
+- [x] Menambahkan kontrol Theme untuk preview palet tanpa push GitHub sebelum persetujuan pengguna
+- [x] Memverifikasi aksesibilitas dan tampilan preview tema pada workspace sebelum meminta persetujuan
+- [x] Memperjelas warna ikon dan teks kecil pada tema Vintage Rose agar tidak menyaru dengan background
+- [x] Mengubah kontrol Theme di workspace menjadi tombol Shuffle Theme acak, sambil mempertahankan pemilihan manual di dashboard
+- [x] Merancang peran warna dan kontras untuk palet gelap Black, Carbon Black, Chocolate Plum, Taupe Grey, dan Light Blue
+- [x] Menambahkan palet gelap baru ke pemilih Theme dan siklus Shuffle tanpa push GitHub
+- [x] Memverifikasi preview desktop palet gelap sebelum meminta persetujuan pengguna
+- [x] Merancang peran warna dan kontras untuk palet Icy Blue, Wisteria Blue, Periwinkle, Cornflower Blue, dan Deep Lilac
+- [x] Menambahkan palet biru-lilac ke pemilih Theme dan siklus Shuffle tanpa push GitHub
+- [x] Memverifikasi preview desktop palet biru-lilac sebelum meminta persetujuan pengguna
+- [x] Merancang peran warna dan kontras untuk palet Prussian Blue, Space Indigo, Dusk Blue, Tropical Teal, dan Neon Ice
+- [x] Menambahkan palet navy-teal ke pemilih Theme dan siklus Shuffle tanpa push GitHub
+- [x] Memverifikasi preview desktop palet navy-teal sebelum meminta persetujuan pengguna
+- [x] Mengekstrak dan mengatalogkan 10 palet baru untuk review Theme kolektif
+- [x] Menambahkan seluruh palet batch baru ke pemilih Theme dan siklus Shuffle tanpa push GitHub
+- [x] Menjalankan regresi lengkap serta menyiapkan review koleksi tema langsung di aplikasi
+- [x] Mengaudit seluruh ikon dan aksen hardcoded yang tidak mengikuti token Theme
+- [x] Mengganti warna ikon tetap dengan token semantik yang kontras pada semua tema
+- [x] Memverifikasi konsistensi ikon pada tema terang dan gelap sebelum melanjutkan review pengguna
+- [x] Mengaudit token sidebar Midnight Blue dan Ocean Depths yang membuat teks navigasi tidak terbaca
+- [x] Memperbaiki kontras navigasi, label, dan tombol sidebar pada Midnight Blue serta Ocean Depths
+- [x] Memverifikasi tampilan sidebar dua tema gelap sebelum melanjutkan review akhir
+- [x] Mengaudit token foreground/background bubble Chat pada seluruh Theme
+- [x] Menetapkan peran bubble AI netral dan bubble user aksen dengan kontras aman pada semua Theme
+- [x] Memverifikasi keterbacaan Chat pada tema gelap dan terang sebelum melanjutkan review akhir
+- [x] Mengaudit token Tea Olive yang membuat teks sidebar Profile dan topbar workspace tidak terbaca
+- [x] Memperbaiki kontras navigasi, label, tombol, dan topbar pada Tea Olive
+- [x] Memverifikasi tampilan Tea Olive pada Profile serta workspace sebelum melanjutkan review akhir
+- [x] Mengaudit label kecil dan ikon Tea Olive yang masih memakai muted color terlalu gelap
+- [x] Memperbaiki kontras kontrol Theme/AI Settings dan subtitle topbar Tea Olive
+- [x] Memverifikasi penyempurnaan Tea Olive sebelum melanjutkan review akhir
+- [x] Mengaudit token Forest Blush yang membuat sidebar dan topbar workspace tidak terbaca jelas
+- [x] Memperbaiki kontras kontrol sidebar serta topbar Forest Blush
+- [x] Memverifikasi tampilan Forest Blush pada Profile dan workspace sebelum melanjutkan review akhir
+- [x] Menghapus Vintage Rose dari pemilih Theme manual dan tombol Shuffle
+- [x] Memverifikasi koleksi final 13 tema tanpa Vintage Rose
+- [x] Menyimpan checkpoint dan mengirim koleksi tema final ke GitHub setelah persetujuan pengguna
+- [x] Memperbaiki kontras tombol Review Key Terms pada Dusk Grape, Grape Soda, Fuchsia Noir, Velvet Orchid, dan Frosted Blue
+- [x] Menambahkan regresi dan memverifikasi keterbacaan tombol Review Key Terms pada lima tema tersebut
+- [x] Menyimpan checkpoint dan mengirim perbaikan kontras Key Terms ke GitHub
+- [x] Mengubah composer Chat menjadi bubble bersih tanpa kotak input besar yang terpisah
+- [x] Memastikan pesan panjang di composer Chat membungkus ke baris baru tanpa terpotong pada desktop dan mobile
+- [x] Menambahkan regresi, memverifikasi tampilan composer Chat, lalu push perbaikannya ke GitHub
+- [x] Menambahkan bubble input Chat yang jelas terlihat dari background tanpa mengembalikan kotak composer besar
+- [x] Memverifikasi bubble multiline dan tombol kirim pada desktop-mobile, lalu push refinement ke GitHub
+- [x] Menghilangkan kotak dalam serta scrollbar kasar dari textarea bubble Chat
+- [x] Menempatkan tombol kirim sebagai bubble terpisah di bawah composer tanpa ruang kosong di atasnya
+- [x] Menambahkan regresi, memverifikasi composer halus desktop-mobile, lalu push refinement ke GitHub
+- [x] Menelusuri penyebab status Translate Chat berubah tanpa tampilan pesan ikut diterjemahkan
+- [x] Memperbaiki sinkronisasi hasil terjemahan ke cache dan renderer Chat
+- [x] Menambahkan regresi Translate Chat pada provider aktivitas AI yang dipakai workspace
+- [x] Menyatukan textarea dan area tombol kirim ke dalam satu bubble composer dengan pembagian area internal tanpa garis terlihat
+- [x] Memverifikasi composer satu bubble pada desktop-mobile dan push refinement ke GitHub
+- [x] Mengganti font dekoratif menjadi font normal pada empty state, heading, kartu Session, dan kartu Key Terms yang ditandai pengguna
+- [x] Menghapus simbol awalan `—` pada empty state yang ditandai pengguna
+- [x] Mempertahankan font dekoratif hanya pada nama profil dan wordmark StudyOS workspace sesuai klarifikasi pengguna
+- [x] Menambahkan regresi, memverifikasi perubahan font, lalu push refinement ke GitHub
+- [x] Menambahkan pilihan Save Vocab terpisah dari Save Terms pada teks yang dipilih
+- [x] Menyimpan Save Vocab sebagai kata dan arti saja tanpa definisi, konteks, atau contoh
+- [x] Menambahkan regresi, memverifikasi Save Vocab dan Save Terms, lalu push fitur ke GitHub
+- [x] Menambahkan popup hover pada teks materi untuk vocab tersimpan dengan kata dan arti singkat
+- [x] Menambahkan popup hover pada teks materi untuk terms tersimpan dengan definisi serta detail opsional
+- [x] Menambahkan regresi matching dan interaksi hover, lalu push fitur ke GitHub
+- [x] Mencegah isi source terpotong saat panel Source di-resize pada desktop dan mobile
+- [x] Memindahkan aksi Save Terms, Save Vocab, dan Explain ke popup kecil yang muncul dekat teks terpilih
+- [x] Menambahkan regresi resize dan popup selection, lalu push refinement ke GitHub
+- [x] Memperbaiki Save Vocab saat 9router lokal mengembalikan respons kosong
+- [x] Menambahkan regresi respons kosong Save Vocab dan push perbaikannya ke GitHub
+- [x] Menjaga popup Save Terms, Save Vocab, dan Explain tetap terlihat penuh di tepi panel atau layar
+- [x] Menutup popup selection saat klik area lain atau menekan Escape tanpa mengganggu tombol aksinya
+- [x] Menambah waktu aman untuk aksi selection melalui 9router lokal pada teks yang lebih panjang
+- [x] Menambahkan regresi batas popup, penutupan, dan timeout lalu push perbaikannya ke GitHub
+- [x] Merender jawaban AI dengan Markdown agar bold, list, dan pemisah tidak tampil sebagai simbol mentah
+- [x] Menutup menu tiga titik session saat klik area lain atau menekan Escape
+- [x] Menambahkan regresi Chat Markdown dan penutupan menu session, lalu push perbaikannya ke GitHub
+- [x] Memperbaiki Continue answer agar benar-benar melanjutkan respons lokal yang terpotong
+- [x] Menjaga recovery respons Chat lokal tetap tampil live bila streaming awal terputus
+- [x] Menambahkan regresi truncation dan recovery streaming, lalu push perbaikannya ke GitHub
+- [x] Membuat mode Fast memberi jawaban lebih pendek dan langsung ke inti
+- [x] Merender heading dan tabel Markdown jawaban AI dengan aman di Chat
+- [x] Menambahkan regresi, memverifikasi tampilan Chat, lalu push penyempurnaan ke GitHub
+- [x] Menghapus kontrol bawaan tabel Markdown yang mengganggu dari bubble Chat
+- [x] Menjaga tabel Chat mengikuti lebar bubble dan hanya scroll mendatar bila diperlukan
+- [x] Menambahkan regresi, memverifikasi tampilan tabel, lalu push perbaikannya ke GitHub
+- [x] Menambahkan field nama teman belajar AI pada Edit Profile dengan default StudyOS dan reset
+- [x] Memakai nama AI pilihan pengguna pada instruksi server serta label bubble Chat
+- [x] Menambahkan regresi persistence, prompt, dan label nama AI lalu push fitur ke GitHub
+- [x] Membesarkan label nama AI di atas bubble Chat agar lebih mudah dibaca
+- [x] Menambahkan regresi keterbacaan label dan push penyempurnaan ke GitHub
+- [x] Menambahkan aksi Change session pada menu titik tiga Chat yang membuka halaman Sessions
+- [x] Menambahkan regresi navigasi Change session dan push penyempurnaan ke GitHub
+- [x] Mengganti judul sumber di panel Source ke font normal
+- [x] Menambahkan regresi tipografi judul sumber dan push penyempurnaan ke GitHub
+- [x] Menampilkan tombol hide panel Source dan Watch pada desktop
+- [x] Menambahkan regresi kontrol hide panel desktop dan push penyempurnaan ke GitHub
+- [x] Menjaga proses AI Save Terms, Save Vocab, dan Explain dari panel Source tetap aktif saat panel di-hide atau pengguna membuka Profile
+- [x] Menampilkan status proses Source yang masih berjalan saat pengguna kembali ke workspace
+- [x] Memindahkan tombol Cancel aktivitas AI ke area composer di samping tombol Send Chat
+- [x] Menambahkan regresi proses Source tahan navigasi, Cancel composer, dan push penyempurnaan ke GitHub
+- [x] Menjaga Generate Quiz tetap aktif saat panel Watch di-hide atau pengguna membuka Profile/Sessions
+- [x] Menambahkan panel aktivitas AI percobaan untuk melihat proses aktif dan membatalkannya
+- [x] Menambahkan regresi proses Quiz tahan navigasi, panel aktivitas, dan push hasil percobaan ke GitHub
+- [x] Menjaga timer Watch tetap berjalan saat panel di-hide atau pengguna membuka Profile/Sessions
+- [x] Mempertahankan dan menyimpan waktu timer pada session yang benar setelah kembali ke workspace
+- [x] Menambahkan regresi timer tahan navigasi dan push perbaikannya ke GitHub
+- [x] Membuat versi percobaan mode Stopwatch dan Countdown Timer pada Watch
+- [x] Merapikan UI Watch dengan angka waktu besar, switch mode, preset menit, dan kontrol ringkas
+- [x] Menambahkan regresi mode timer dan menyiapkan preview tanpa push GitHub
+- [x] Melonggarkan jarak angka dan ring pada Countdown Timer percobaan
+- [x] Memadatkan tinggi kartu Watch percobaan agar seimbang dengan Quiz, Key Terms, dan Notes
+- [x] Menjalankan regresi countdown final dan push mode Watch yang disetujui ke GitHub
+- [x] Membuat tabel Markdown AI memakai lebar bubble secara konsisten dan scroll hanya saat perlu
+- [x] Meningkatkan kontras code block AI serta menghapus kontrol bawaan yang mengganggu
+- [x] Menambahkan regresi tabel dan code block Chat lalu push perbaikannya ke GitHub
+- [x] Memastikan cache Translate memproses jawaban AI baru tanpa perlu refresh
+- [x] Menambahkan regresi Translate jawaban AI baru dan push perbaikannya ke GitHub
+- [x] Membatasi tampilan kontrol Cancel saat beberapa aktivitas AI berjalan bersamaan
+- [x] Menormalkan bold Markdown AI yang memakai penanda bintang berlebih
+- [x] Menambahkan regresi kontrol Cancel bertumpuk dan bold Markdown lalu push perbaikannya ke GitHub
+- [x] Merapikan code block jawaban AI agar tidak tampil sebagai kotak bertumpuk
+- [x] Menjaga Translate Chat tetap berjalan saat panel ditutup atau pengguna membuka Profile/Sessions
+- [x] Menambahkan regresi code block dan Translate tahan navigasi lalu push perbaikannya ke GitHub
+- [x] Menghapus garis ganda pada code block jawaban AI
+- [x] Menampilkan indikator aktivitas AI hanya pada halaman Profile
+- [x] Membuat Cancel Translate langsung membatalkan tampilan proses dan mengabaikan hasil terlambat
+- [x] Menambahkan regresi tiga perbaikan lanjutan lalu push ke GitHub
+- [x] Membuat logo ikon StudyOS sederhana untuk favicon
+- [x] Memasang favicon StudyOS di aplikasi dan memverifikasi tampilannya
+- [x] Menambahkan regresi favicon lalu push logo StudyOS ke GitHub
+- [x] Mengirim preview logo StudyOS dan menunggu persetujuan sebelum revisi atau push logo berikutnya
+- [x] Membuat preview revisi logo dengan highlight kontras untuk tema gelap dan terang
+- [x] Menunggu persetujuan sebelum memasang atau push revisi logo ber-highlight
+- [x] Memasang logo StudyOS ber-highlight yang disetujui sebagai favicon lalu push ke GitHub
+- [x] Menelusuri favicon atau manifest lain yang masih membuat browser memakai ikon lama
+- [x] Memasang jalur favicon baru yang pasti dimuat browser lokal dan memverifikasinya
+- [x] Menambahkan regresi favicon lalu push perbaikannya ke GitHub
+- [x] Membuat preview logo StudyOS dengan ujung bentuk lebih rounded
+- [x] Menunggu persetujuan sebelum mengganti favicon dengan logo rounded
+- [x] Membuat preview alternatif logo StudyOS versi lebih bulat untuk perbandingan
+- [x] Menunggu pilihan pengguna antara versi rounded normal dan versi lebih bulat
+- [x] Membuat preview logo bulat dengan lingkaran luar utuh tanpa garis orbit terputus
+- [x] Menunggu pilihan pengguna sebelum memasang versi logo bulat yang baru
+- [x] Membuat preview logo rounded dengan background lingkaran putih
+- [x] Menunggu persetujuan sebelum mengganti favicon dengan logo berlatar putih
+- [x] Memasang logo StudyOS berlatar lingkaran putih yang disetujui sebagai favicon lalu push ke GitHub
+- [x] Membuat favicon format ICO dengan jalur baru agar Chrome memuat logo terbaru
+- [x] Memverifikasi favicon format ICO dan push perbaikannya ke GitHub
+- [x] Menghapus canvas kotak dari favicon agar bagian luar lingkaran transparan
+- [x] Memverifikasi favicon transparan lalu push perbaikannya ke GitHub
+- [x] Memperbesar isi favicon bulat secara proporsional agar lebih terlihat di tab browser
+- [x] Memverifikasi favicon lebih besar lalu push perbaikannya ke GitHub
+- [x] Membandingkan provider pencarian Web dan Academic untuk fitur Search Source
+- [x] Menyepakati alur dan UI Search Source sebelum implementasi
+- [x] Memeriksa apakah provider 9router yang tersedia dapat menjalankan Search Source
+- [x] Memilih provider Search Source yang aman dan hemat sebelum implementasi
+- [x] Menambahkan Search Source dengan Tavily Basic untuk Web dan OpenAlex untuk Academic
+- [x] Menjaga Upload file dan Fetch URL tetap berfungsi tanpa perubahan alur
+- [x] Menambahkan batas 5 hasil, preview pilihan, dan pesan kuota/error yang jelas
+- [x] Menambahkan regresi Search Source lalu push fitur yang disetujui ke GitHub
+- [x] Membuat daftar hasil Search dapat discroll dengan scrollbar tipis dan halus
+- [x] Mengganti ikon pemicu Search Source dari kaca pembesar menjadi kompas
+- [x] Menambahkan regresi perbaikan scroll dan ikon Search sebelum meminta persetujuan push
+- [x] Menaikkan posisi ikon kompas agar sejajar vertikal dengan label SOURCE
+- [x] Memverifikasi alignment ikon kompas sebelum meminta persetujuan push
+- [x] Menyimpan judul hasil Search sebagai label sumber agar hasil dari domain sama dapat dibedakan
+- [x] Menampilkan domain sebagai metadata kecil tanpa mengubah judul hasil Search
+- [x] Menambahkan regresi sumber Search berjudul dan menyiapkan preview tanpa push GitHub
+- [x] Membuat judul sumber hasil Search membungkus hingga dua baris pada panel sempit
+- [x] Menjaga domain ringkas dan tombol hapus tetap terlihat pada item Source panjang
+- [x] Menambahkan regresi Source panel sempit dan menyiapkan preview tanpa push GitHub
+- [x] Menghapus gaya truncate yang menimpa pembungkus judul Source panjang
+- [x] Memverifikasi judul Search benar-benar membungkus dua baris pada panel sempit
+- [x] Merancang ulang workspace tablet agar panel tidak saling menekan atau terpotong
+- [x] Membuat navigasi ringkas Source, Chat, dan Watch untuk workspace HP
+- [x] Memastikan proses AI dan timer tetap berjalan saat pengguna berpindah panel responsive
+- [x] Menambahkan regresi serta preview tablet-HP tanpa push GitHub
+- [x] Memperbaiki area Chat responsive agar respons panjang tidak terpotong di HP
+- [x] Memastikan daftar pesan Chat dapat discroll penuh di atas composer dan navigasi panel
+- [x] Menambahkan regresi respons panjang pada Chat responsive sebelum meminta persetujuan push
+- [x] Membatasi tinggi viewport pesan Chat mobile sebelum composer agar respons tidak tertutup
+- [x] Memastikan overflow pesan Chat mobile benar-benar scroll vertikal
+- [x] Menambahkan regresi tinggi Chat mobile sebelum meminta persetujuan push
+- [x] Menilai penggantian area riwayat Chat compact ke scroll native (digantikan setelah screenshot menunjukkan akar masalah adalah overflow lebar bubble)
+- [x] Mempertahankan ScrollArea Chat desktop serta Source dan Watch tanpa perubahan (digantikan oleh perbaikan batas lebar bubble)
+- [x] Menilai regresi scroll native Chat compact (digantikan oleh regresi respons dan tabel Chat lebar)
+- [x] Mengunci lebar bubble Chat agar tidak meluber keluar dari panel pada semua ukuran layar
+- [x] Membatasi Markdown dan tabel Chat di dalam bubble tanpa memotong teks
+- [x] Menambahkan regresi respons dan tabel Chat lebar sebelum meminta persetujuan push
+- [x] Menilai kontras dan visibilitas bubble pesan pengguna pada Chat mobile (digantikan setelah screenshot menunjukkan pesan terdorong keluar oleh overflow lebar)
+- [x] Memastikan pesan pengguna tetap berada di dalam batas panel ketika riwayat Chat panjang (ditangani oleh batas lebar bubble)
+- [x] Menambahkan regresi bubble pengguna mobile (dicakup oleh regresi respons dan tabel Chat lebar)
+- [x] Mempertahankan dialog Search setelah satu hasil berhasil ditambahkan
+- [x] Memberi status Added pada hasil Search yang sudah masuk ke sesi agar tidak terduplikasi
+- [x] Menambahkan regresi penambahan beberapa hasil Search sebelum meminta persetujuan push
+- [x] Mengubah grid Key Terms desktop menjadi library/list yang mudah dipindai
+- [x] Menambahkan pencarian istilah dan ringkasan jumlah hasil pada halaman Key Terms
+- [x] Memindahkan context tambahan ke detail yang tidak memenuhi tampilan utama
+- [x] Merapikan aksi hapus Key Terms dan menambahkan regresi sebelum meminta persetujuan push
+- [x] Memadatkan kartu Sessions desktop tanpa mengubah aksi buka, pin, atau hapus
+- [x] Mengubah grid Sessions desktop menjadi maksimal tiga kolom yang lebih mudah dipindai
+- [x] Menambahkan regresi kartu Sessions ringkas sebelum meminta persetujuan push
+- [x] Menambahkan radius halus yang konsisten pada empat sudut luar workspace desktop
+- [x] Menyamakan gaya tombol Again dan Good dengan tombol Key Terms review lain
+- [x] Menambahkan regresi radius workspace dan tombol review sebelum meminta persetujuan push
+- [x] Memberi ruang luar tipis agar radius bingkai workspace desktop terlihat jelas
+- [x] Menyesuaikan radius bingkai workspace agar lebih terasa tanpa mengurangi area kerja berlebihan
+- [x] Memverifikasi radius workspace yang diperjelas sebelum meminta persetujuan push
+- [x] Memisahkan Source, Chat, dan Watch menjadi tiga kartu beradius pada workspace desktop
+- [x] Menjaga jarak tipis dan handle resize tetap berfungsi di antara kartu panel
+- [x] Menambahkan regresi panel desktop terpisah sebelum meminta persetujuan push
+- [x] Mendorong perbaikan sinkronisasi dan retry Translate Chat yang disetujui ke GitHub
+- [x] Menampilkan bubble terjemahan sementara tanpa menghapus bubble asli selama proses berjalan
+- [x] Menganimasikan isi bubble terjemahan secara bertahap lalu menggantikan bubble asli saat selesai
+- [x] Menambahkan regresi transisi bubble Translate dan push perbaikan yang disetujui ke GitHub
+- [x] Menghapus efek bubble Translate bertahap yang mengganggu tumpukan Chat
+- [x] Mengembalikan hasil Translate langsung tanpa bubble tambahan
+- [x] Memverifikasi regresi Translate setelah efek live dihapus
+- [x] Menampilkan indikator progres Translate berupa bar dan persentase di bawah header Chat
+- [x] Menghitung progres Translate dari pesan yang berhasil diterima dan menyembunyikan indikator pada 100%
+- [x] Menambahkan regresi indikator progres Translate lalu push perbaikan yang disetujui ke GitHub
+- [x] Mengganti persentase Translate perkiraan menjadi progres batch yang akurat
+- [x] Menyederhanakan indikator menjadi bar dan angka persen tanpa jumlah pesan terlihat
+- [x] Menambahkan regresi progres batch lalu push perbaikan yang disetujui ke GitHub
+- [x] Menambahkan shortcut garis miring untuk memfokuskan input Chat dari workspace
+- [x] Menjaga shortcut agar tidak mengganggu input, editor, atau dialog lain yang sedang aktif
+- [x] Menambahkan regresi shortcut Chat sebelum meminta persetujuan push
+- [x] Mendorong shortcut garis miring Chat yang disetujui ke GitHub
+- [x] Mengubah aturan responsive menjadi satu panel di bawah 1200px dan mempertahankan desktop tiga panel mulai 1200px
+- [x] Mengunci lebar row, bubble, Markdown, tabel, kode, serta label provider Chat agar tidak terpotong pada portrait sempit
+- [x] Menjaga input Ask Anything dan navigasi bawah tetap terlihat pada mode Chat landscape pendek
+- [x] Menambahkan regresi responsive Chat pada ukuran 344×882, 430×932, 914×412, 956×440, dan desktop 1200px+
+- [x] Menyampaikan kesimpulan hasil tes responsive kepada pengguna tanpa push GitHub
+- [x] Mendorong perbaikan responsive Chat yang disetujui ke GitHub
+- [x] Menelusuri sumber overflow bubble Chat yang masih memotong teks pada HP portrait 360–440px
+- [x] Memperbaiki pembungkus renderer Chat yang menyebabkan isi bubble meluber pada HP portrait
+- [x] Memverifikasi Chat pada HP portrait serta melindungi tablet dan desktop sebelum melapor tanpa push
+- [x] Mendorong perbaikan overflow bubble Chat HP portrait yang disetujui ke GitHub
+- [x] Menelusuri pembungkus Markdown nyata yang masih memotong respons Chat pada HP portrait
+- [x] Memperbaiki elemen Markdown atau CSS yang menahan teks satu baris pada respons Chat HP
+- [x] Memverifikasi pola respons asli pada HP portrait serta regresi Chat sebelum melapor tanpa push
+- [x] Mendorong perbaikan wrapping respons Chat HP yang disetujui ke GitHub
+- [x] Menelusuri arah handle resize yang membuat panel desktop berlawanan sisi berubah
+- [x] Memperbaiki pemetaan resize handle Source dan Watch tanpa mengubah layout responsive
+- [x] Menambahkan regresi arah resize panel desktop sebelum meminta persetujuan push
+- [x] Mendorong perbaikan arah resize panel desktop yang disetujui ke GitHub
+- [x] Menelusuri lifecycle Translate yang berhenti saat pindah Profile atau menyembunyikan panel Chat
+- [x] Memindahkan state proses dan indikator Translate ke lifecycle workspace yang tetap mounted
+- [x] Memverifikasi Translate, indikator, dan Cancel saat hide panel serta pindah halaman sebelum melapor tanpa push
+
+- [x] Membandingkan VPS Hostinger dengan opsi hosting terkelola untuk beta online 9router
+
+- [x] Mengganti pemeriksaan VPS beta dari Hostinger ke Nevacloud
+- [x] Memeriksa spesifikasi, lokasi, root/SSH, storage persisten, dan opsi template Nevacloud
+
+- [x] Memeriksa arsitektur, RAM, storage, jaringan, dan versi Debian VPS baru
+- [x] Mengamankan akses SSH/firewall VPS sebelum 9router dibuka ke publik
+- [x] Memasang 9router dengan storage persisten dan konfigurasi yang dapat dipulihkan
+- [x] Menguji endpoint 9router secara lokal sebelum menghubungkannya ke StudyOS
+
+- [x] Memastikan VPS, Docker, dan container 9router pulih setelah Power Off
+- [x] Menyelesaikan uji chat non-stream dengan model free yang sudah tersambung
+
+- [x] Mendiagnosis key Endpoint 9router yang ditolak meski variabel shell terisi
+
+- [x] Menguji model/provider fallback setelah OpenCode Free mengembalikan content kosong
+
+- [x] Memetakan `oc/mimo-v2.5-free` ke ID Mimo yang tersedia di 9router dan memverifikasi output teks
+
+- [x] Menguji parameter reasoning dan output token untuk mencegah `content: null` pada Mimo
+- [x] Membuat combo 9router `studyos` dengan Mimo sebagai model utama dan Nemotron Free sebagai fallback
+- [x] Menguji endpoint combo 9router `Studyos` dengan API key setelah session terminal tersambung kembali
+- [x] Memperbaiki konfigurasi Caddy HTTPS setelah sintaks `auto_https on` ditolak oleh versi Caddy VPS
+- [x] Memisahkan header token publik StudyOS dari Authorization API key upstream 9router pada reverse proxy
+- [x] Memperbaiki urutan handler Caddy agar request bertoken valid diproxy sebelum fallback 401
+- [x] Memverifikasi endpoint HTTPS publik dengan token StudyOS, proxy Authorization internal, combo `Studyos`, dan respons HTTP 200
+- [x] Menambahkan URL endpoint HTTPS, token publik, model `Studyos`, dan fallback server-side ke konfigurasi StudyOS
+- [x] Mengaudit kompatibilitas StudyOS dengan hosting gratis untuk beta sederhana tanpa login/database multi-user
+- [x] Membandingkan Vercel dengan alternatif hosting gratis yang mendukung backend Node/tRPC
+- [x] Menyusun rekomendasi hosting beta dan langkah deployment tanpa push atau perubahan kode
+- [x] Menyiapkan entrypoint Express yang kompatibel dengan Vercel tanpa mengganggu start lokal
+- [x] Menyesuaikan static assets, streaming Chat, dan batas upload untuk deployment Vercel
+- [x] Menambahkan regresi deployment dan memvalidasi production build Vercel sebelum push GitHub
+- [ ] Memverifikasi ulang `package.json`, `vercel.json`, route `/api`, dan entrypoint `server.ts` sebelum push GitHub
+- [ ] Mengaudit repository dan Git ignore untuk memastikan credential 9router, token VPS, `.env`, dan pola `sk-` tidak ikut dipush
+- [ ] Menyiapkan koneksi Vercel setelah konfigurasi dinyatakan aman dan pengguna memberi persetujuan eksplisit
+- [x] Membuat commit dan push checkpoint adapter Vercel ke repository GitHub setelah audit secret terakhir
+- [x] Memverifikasi branch dan commit remote setelah push GitHub
+- [ ] Memeriksa apakah konektor atau alur akses Vercel tersedia untuk sesi ini
+- [ ] Menghubungkan repository StudyCh ke project Vercel tanpa membocorkan secret
+- [ ] Mengatur environment variables Vercel dan menjalankan deployment test beta
+- [x] Memperbaiki error Vercel `functions.server.ts.includeFiles should be string`
+- [x] Memvalidasi ulang konfigurasi dan build setelah koreksi `includeFiles`
+- [x] Push koreksi `vercel.json` ke GitHub dan memandu redeploy
+- [x] Memperbaiki error Vercel `Function Runtimes must have a valid version` pada `vercel.json`
+- [x] Memvalidasi build dan regresi setelah koreksi runtime
+- [ ] Push koreksi runtime ke GitHub dan memandu redeploy
