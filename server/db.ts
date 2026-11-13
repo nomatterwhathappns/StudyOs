@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { aiProviderCredentials, InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -87,28 +87,4 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
-}
-
-export async function getAiProviderCredential(userId: number, provider: string) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is unavailable.");
-  const result = await db.select().from(aiProviderCredentials)
-    .where(and(eq(aiProviderCredentials.userId, userId), eq(aiProviderCredentials.provider, provider)))
-    .limit(1);
-  return result[0];
-}
-
-export async function saveAiProviderCredential(input: { userId: number; provider: string; encryptedKey: string; keySuffix: string }) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is unavailable.");
-  await db.insert(aiProviderCredentials).values(input).onDuplicateKeyUpdate({
-    set: { encryptedKey: input.encryptedKey, keySuffix: input.keySuffix, updatedAt: new Date() },
-  });
-}
-
-export async function deleteAiProviderCredential(userId: number, provider: string) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is unavailable.");
-  await db.delete(aiProviderCredentials)
-    .where(and(eq(aiProviderCredentials.userId, userId), eq(aiProviderCredentials.provider, provider)));
 }

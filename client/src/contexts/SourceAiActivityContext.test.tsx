@@ -37,7 +37,7 @@ import { AiActivityMenu } from "@/components/studyos/AiActivityMenu";
 function SourceTaskStarter({ visible }: { visible: boolean }) {
   const sourceAi = useSourceAiActivity();
   if (!visible) return null;
-  return <button type="button" onClick={() => sourceAi.startKeyTerm({ sessionId: "session-a", sessionName: "Biology", materials: "Plants use light.", responseStyle: "Balanced", model: "local-9router", selection: "Photosynthesis" })}>Start Save Terms</button>;
+  return <button type="button" onClick={() => sourceAi.startKeyTerm({ sessionId: "session-a", sessionName: "Biology", materials: "Plants use light.", responseStyle: "Balanced", model: "active", selection: "Photosynthesis" })}>Start Save Terms</button>;
 }
 
 function SourceTaskStatus() {
@@ -49,13 +49,13 @@ function SourceTaskStatus() {
 function QuizTaskStarter({ visible }: { visible: boolean }) {
   const sourceAi = useSourceAiActivity();
   if (!visible) return null;
-  return <button type="button" onClick={() => sourceAi.startQuiz({ sessionId: "session-a", sessionName: "Biology", materials: "Plants use light.", responseStyle: "Balanced", model: "local-9router", quiz: { difficulty: "medium", questionCount: 3, optionCount: 4 } })}>Start Generate Quiz</button>;
+  return <button type="button" onClick={() => sourceAi.startQuiz({ sessionId: "session-a", sessionName: "Biology", materials: "Plants use light.", responseStyle: "Balanced", model: "active", quiz: { difficulty: "medium", questionCount: 3, optionCount: 4 } })}>Start Generate Quiz</button>;
 }
 
 function TranslationTaskStarter({ visible }: { visible: boolean }) {
   const sourceAi = useSourceAiActivity();
   if (!visible) return null;
-  return <button type="button" onClick={() => sourceAi.startChatTranslation({ sessionId: "session-a", sessionName: "Biology", model: "local-9router", target: "english", messages: [{ id: "ai-1", content: "Halo" }] })}>Start Translate</button>;
+  return <button type="button" onClick={() => sourceAi.startChatTranslation({ sessionId: "session-a", sessionName: "Biology", model: "active", target: "english", messages: [{ id: "ai-1", content: "Halo" }] })}>Start Translate</button>;
 }
 
 function TranslationTaskStatus() {
@@ -112,7 +112,7 @@ describe("Source AI activity provider", () => {
     function LongTranslationStarter({ visible }: { visible: boolean }) {
       const sourceAi = useSourceAiActivity();
       if (!visible) return null;
-      return <button type="button" onClick={() => sourceAi.startChatTranslation({ sessionId: "session-a", sessionName: "Biology", model: "local-9router", target: "english", messages: Array.from({ length: 7 }, (_, index) => ({ id: `ai-${index + 1}`, content: `Halo ${index + 1}` })) })}>Start long Translate</button>;
+      return <button type="button" onClick={() => sourceAi.startChatTranslation({ sessionId: "session-a", sessionName: "Biology", model: "active", target: "english", messages: Array.from({ length: 7 }, (_, index) => ({ id: `ai-${index + 1}`, content: `Halo ${index + 1}` })) })}>Start long Translate</button>;
     }
     const ui = render(<SourceAiActivityProvider><LongTranslationStarter visible /><TranslationTaskStatus /></SourceAiActivityProvider>);
     fireEvent.click(ui.getByRole("button", { name: "Start long Translate" }));
@@ -130,7 +130,7 @@ describe("Source AI activity provider", () => {
     function LongTranslationStarter({ visible }: { visible: boolean }) {
       const sourceAi = useSourceAiActivity();
       if (!visible) return null;
-      return <button type="button" onClick={() => sourceAi.startChatTranslation({ sessionId: "session-a", sessionName: "Biology", model: "local-9router", target: "english", messages: Array.from({ length: 7 }, (_, index) => ({ id: `cancel-${index + 1}`, content: `Halo ${index + 1}` })) })}>Start cancelable Translate</button>;
+      return <button type="button" onClick={() => sourceAi.startChatTranslation({ sessionId: "session-a", sessionName: "Biology", model: "active", target: "english", messages: Array.from({ length: 7 }, (_, index) => ({ id: `cancel-${index + 1}`, content: `Halo ${index + 1}` })) })}>Start cancelable Translate</button>;
     }
     const ui = render(<SourceAiActivityProvider><LongTranslationStarter visible /><TranslationTaskCancel /><TranslationTaskStatus /></SourceAiActivityProvider>);
     fireEvent.click(ui.getByRole("button", { name: "Start cancelable Translate" }));

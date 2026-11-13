@@ -35,6 +35,7 @@
       "authorization",
       "cookie",
       "session",
+      "headers",
     ],
     maxBodyLength: 10240,
     // UI event logging privacy policy:
@@ -126,6 +127,30 @@
     }
   }
 
+  function shouldIgnoreRequest(value) {
+    try {
+      var pathname = new URL(String(value), location.href).pathname;
+      try { pathname = decodeURIComponent(pathname); } catch (e) { /* keep the original path */ }
+      if (pathname.indexOf("/__manus__/") === 0) return true;
+      // Exclude the entire batch: unrelated procedures can share a request body
+      // with a write-only key or custom authentication header.
+      return pathname.indexOf("/api/trpc/") === 0 &&
+        /(?:^|[,/])aiConnections(?:[.%]|$)/i.test(pathname.slice("/api/trpc/".length));
+    } catch (e) {
+      // A malformed URL must not cause a credential-bearing mutation to be logged.
+      return /aiConnections(?:\.|%|$)/i.test(String(value));
+    }
+  }
+
+  function sanitizeHeaders(headers) {
+    var safeValues = ["accept", "accept-language", "cache-control", "content-length", "content-type", "pragma"];
+    var result = {};
+    new Headers(headers || {}).forEach(function (value, name) {
+      result[name] = safeValues.indexOf(name.toLowerCase()) !== -1 ? value : "[REDACTED]";
+    });
+    return result;
+  }
+
   // ==========================================================================
   // Semantic UI Event Logging (agent-friendly)
   // ==========================================================================
@@ -133,7 +158,7 @@
   function shouldIgnoreTarget(target) {
     try {
       if (!target || !(target instanceof Element)) return false;
-      return !!target.closest(".manus-no-record");
+      return !!target.closest(".manus-no-record, [data-private]");
     } catch (e) {
       return false;
     }
@@ -151,6 +176,7 @@
 
   function elText(el) {
     try {
+      if (isSensitiveField(el)) return "[REDACTED]";
       var t = el.innerText || el.textContent || "";
       return compactText(t, CONFIG.uiTextMaxLen);
     } catch (e) {
@@ -205,6 +231,7 @@
 
   function isSensitiveField(el) {
     if (!el || !(el instanceof Element)) return false;
+    if (el.closest("[data-private]")) return true;
     var tag = el.tagName ? el.tagName.toLowerCase() : "";
     if (tag !== "input" && tag !== "textarea") return false;
 
@@ -462,16 +489,14 @@
     var method = init.method || (input && input.method) || "GET";
 
     // Don't intercept internal requests
-    if (url.indexOf("/__manus__/") === 0) {
+    if (shouldIgnoreRequest(url)) {
       return originalFetch(input, init);
     }
 
     // Safely parse headers (avoid breaking if headers format is invalid)
     var requestHeaders = {};
     try {
-      if (init.headers) {
-        requestHeaders = Object.fromEntries(new Headers(init.headers).entries());
-      }
+      requestHeaders = sanitizeHeaders(init.headers || (input && input.headers));
     } catch (e) {
       requestHeaders = { _parseError: true };
     }
@@ -500,7 +525,7 @@
         entry.response = {
           status: response.status,
           statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
+          headers: sanitizeHeaders(response.headers),
           body: null,
         };
 
@@ -598,9 +623,9 @@
   var originalXHRSend = XMLHttpRequest.prototype.send;
 
   XMLHttpRequest.prototype.open = function (method, url) {
-    this._manusData = {
+    this._manusData = shouldIgnoreRequest(url) ? null : {
       method: (method || "GET").toUpperCase(),
-      url: url,
+      url: String(url),
       startTime: null,
     };
     return originalXHROpen.apply(this, arguments);
@@ -612,12 +637,14 @@
     if (
       xhr._manusData &&
       xhr._manusData.url &&
-      xhr._manusData.url.indexOf("/__manus__/") !== 0
+      !shouldIgnoreRequest(xhr._manusData.url)
     ) {
+      var requestData = xhr._manusData;
       xhr._manusData.startTime = Date.now();
       xhr._manusData.requestBody = body ? sanitizeValue(tryParseJson(body)) : null;
 
       xhr.addEventListener("load", function () {
+        if (xhr._manusData !== requestData) return;
         var contentType = (xhr.getResponseHeader("content-type") || "").toLowerCase();
         var responseBody = null;
 
@@ -683,6 +710,7 @@
       });
 
       xhr.addEventListener("error", function () {
+        if (xhr._manusData !== requestData) return;
         var entry = {
           timestamp: xhr._manusData.startTime,
           type: "xhr",

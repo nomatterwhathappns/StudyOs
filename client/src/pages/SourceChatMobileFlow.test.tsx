@@ -319,6 +319,7 @@ describe("mobile Source and AI flow", () => {
   });
 
   it("accepts a source file and sends a query-aware source context to AI on a narrow viewport", async () => {
+    localStorage.setItem("studyos_ai_model", "local-9router");
     const sourceUi = render(<SourcePanelWithProvider session={session} />);
     const input = sourceUi.container.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [new File(["Plants use light."], "plants.txt", { type: "text/plain" })] } });
@@ -340,6 +341,7 @@ describe("mobile Source and AI flow", () => {
     expect(addMessage).toHaveBeenCalledWith("session-mobile", { role: "user", content: "How does photosynthesis use light?" });
     expect(JSON.parse((vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit).body as string)).toEqual(expect.objectContaining({
       sessionName: "Plant biology",
+      model: "active",
       materials: expect.stringContaining("[Source: Plants.md · part 1]"),
       history: [{ role: "user", content: "How does photosynthesis use light?" }],
     }));
@@ -404,7 +406,7 @@ describe("mobile Source and AI flow", () => {
     expect(chatMutate).not.toHaveBeenCalled();
   });
 
-  it.each([["desktop", 1280], ["mobile", 375]] as const)("uses an explicit English target, flips the next label, and keeps the UI language unchanged on %s", async (_viewport, width) => {
+  it.each([["desktop", 1280], ["mobile", 375]] as const)("uses the active connection despite a stale model preference and keeps the English target explicit on %s", async (_viewport, width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     localStorage.setItem("studyos_ai_model", "claude-haiku-4-5");
     const translatedSession: StudySession = {
@@ -433,7 +435,7 @@ describe("mobile Source and AI flow", () => {
     await waitFor(() => expect(translateChatMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ messages: [
       { id: "english-user", content: "Can you explain cloud storage?" },
       { id: "indonesian-ai", content: "Cloud storage menyimpan file lewat internet." },
-    ], target: "english", model: "claude-haiku-4-5" })));
+    ], target: "english", model: "active" })));
     await waitFor(() => expect(ui.getByText("Can you explain cloud storage?")).toBeTruthy());
     await waitFor(() => expect(ui.getByText("Cloud storage stores files over the internet.")).toBeTruthy());
     expect(ui.getByLabelText("Ask StudyOS")).toBeTruthy();

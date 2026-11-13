@@ -14,7 +14,7 @@ const context = { user: null, req: {} as TrpcContext["req"], res: {} as TrpcCont
 const originalLocalMode = process.env.STUDYOS_LOCAL_MODE;
 
 describe("study.uploadAvatar", () => {
-  beforeEach(() => { vi.clearAllMocks(); delete process.env.STUDYOS_LOCAL_MODE; });
+  beforeEach(() => { vi.clearAllMocks(); process.env.STUDYOS_LOCAL_MODE = "false"; });
   afterEach(() => {
     if (originalLocalMode === undefined) delete process.env.STUDYOS_LOCAL_MODE;
     else process.env.STUDYOS_LOCAL_MODE = originalLocalMode;
@@ -34,7 +34,7 @@ describe("study.uploadAvatar", () => {
   });
 
   it("keeps a validated avatar in browser persistence and skips cloud storage in local mode", async () => {
-    process.env.STUDYOS_LOCAL_MODE = "true";
+    delete process.env.STUDYOS_LOCAL_MODE;
 
     await expect(appRouter.createCaller(context).study.uploadAvatar({ imageDataUrl: pngDataUrl })).resolves.toEqual({ url: pngDataUrl });
     expect(storagePut).not.toHaveBeenCalled();

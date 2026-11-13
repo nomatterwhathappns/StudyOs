@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { isLocalStudyMode } from "./runtimeMode";
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("local laptop runtime", () => {
   it("does not render an unresolved cloud analytics placeholder in the client shell", () => {
@@ -9,14 +12,12 @@ describe("local laptop runtime", () => {
     expect(html).not.toContain("VITE_ANALYTICS_WEBSITE_ID");
   });
 
-  it("defers cloud OAuth and storage registration while local mode is active", () => {
-    const bootstrap = readFileSync(resolve(process.cwd(), "server/_core/index.ts"), "utf8");
-    const context = readFileSync(resolve(process.cwd(), "server/_core/context.ts"), "utf8");
-    expect(bootstrap).toContain('const localStudyMode = process.env.STUDYOS_LOCAL_MODE === "true"');
-    expect(bootstrap).toContain("if (!localStudyMode)");
-    expect(bootstrap).toContain('await import("./oauth")');
-    expect(context).toContain('if (process.env.STUDYOS_LOCAL_MODE !== "true")');
-    expect(context).toContain('await import("./sdk")');
-    expect(context).not.toContain('import { sdk } from "./sdk"');
+  it("works locally without an environment file and enables cloud mode only explicitly", () => {
+    vi.stubEnv("STUDYOS_LOCAL_MODE", undefined);
+    expect(isLocalStudyMode()).toBe(true);
+    vi.stubEnv("STUDYOS_LOCAL_MODE", "true");
+    expect(isLocalStudyMode()).toBe(true);
+    vi.stubEnv("STUDYOS_LOCAL_MODE", "false");
+    expect(isLocalStudyMode()).toBe(false);
   });
 });

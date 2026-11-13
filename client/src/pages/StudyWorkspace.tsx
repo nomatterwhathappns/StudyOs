@@ -11,6 +11,7 @@ import { useOptionalSourceAiActivity, useSourceAiActivity } from "@/contexts/Sou
 import { useWatchTimer } from "@/contexts/WatchTimerContext";
 import { buildAdaptiveMaterialContext, buildMaterialChunks, materialChunkDomId } from "@/lib/material-context";
 import { trpc } from "@/lib/trpc";
+import { readAiPreferences } from "@/lib/ai-preferences";
 import type { Quiz, StudyCitation, StudySession, VocabItem, VocabReviewRating } from "@/lib/study-types";
 import { compactKeyTermText, isVocabularyDue, plainText, scoreQuiz, vocabularyDueAt } from "@/lib/study-utils";
 import { useStudyStore } from "@/store/useStudyStore";
@@ -92,14 +93,7 @@ export default function StudyWorkspace() {
   const [sourceVisible, setSourceVisible] = useState(true);
   const [watchVisible, setWatchVisible] = useState(true);
   const [compactPanel, setCompactPanel] = useState<CompactWorkspacePanel>("chat");
-  const localAiRouter = trpc.study.localAiRouterStatus.useQuery(undefined, { staleTime: 60_000 });
-
   useEffect(() => { void hydrate(); }, [hydrate]);
-  useEffect(() => {
-    if (localAiRouter.data?.enabled && localStorage.getItem("studyos_ai_model") !== "local-9router") {
-      localStorage.setItem("studyos_ai_model", "local-9router");
-    }
-  }, [localAiRouter.data?.enabled]);
   useEffect(() => {
     if (hydrated && sessions.length === 0) createSession();
     if (hydrated && sessions.length > 0 && !activeSessionId) setActiveSession(sessions[0].id);
@@ -224,7 +218,7 @@ function SourcePanelContent({ session }: { session: StudySession }) {
     finally { if (fileRef.current) fileRef.current.value = ""; }
   };
 
-  const requestFromSelection = () => { const preferences = readAiSettings(); return { sessionId: session.id, sessionName: session.name, materials: materialContext(session, selection, preferences.responseStyle), responseStyle: preferences.responseStyle, model: preferences.model, selection: selection.trim() }; };
+  const requestFromSelection = () => { const preferences = readAiPreferences(); return { sessionId: session.id, sessionName: session.name, materials: materialContext(session, selection, preferences.responseStyle), responseStyle: preferences.responseStyle, model: preferences.model, selection: selection.trim() }; };
   const saveSelection = () => { if (!selection.trim() || draftKeyTerm.isPending) return; setError(""); sourceAi.startKeyTerm(requestFromSelection()); setSelection(""); };
   const saveVocabulary = () => { if (!selection.trim() || draftVocabulary.isPending) return; setError(""); sourceAi.startVocabulary(requestFromSelection()); setSelection(""); };
   const saveKeyTermDraft = (draft: KeyTermDraft) => { if (keyTermTask) sourceAi.saveKeyTerm(keyTermTask.id, draft); setSelection(""); };
@@ -407,7 +401,7 @@ export function ChatPanel({ session, onNewSession, onOpenDashboard, onOpenSessio
     if (!translateChat || translationRequestVersion === 0) return;
     const missing = session.chatHistory.filter((message) => message.content.trim() && !translationCache[translationTarget][message.id] && !translatingIdsRef.current.has(message.id) && !translationFailuresRef.current.has(message.id));
     if (!missing.length) return;
-    const preferences = readAiSettings();
+    const preferences = readAiPreferences();
     if (sourceAi) { sourceAi.startChatTranslation({ sessionId: session.id, sessionName: session.name, model: preferences.model, target: translationTarget, messages: missing.map(({ id, content }) => ({ id, content })) }); return; }
     const batch = missing.slice(0, 6);
     const run = translationRunRef.current;
@@ -424,7 +418,7 @@ export function ChatPanel({ session, onNewSession, onOpenDashboard, onOpenSessio
       .finally(() => batch.forEach((message) => translatingIdsRef.current.delete(message.id)));
   }, [translateChat, translationTarget, translationCache, translateChatMessages.mutateAsync, translationRequestVersion, sourceAi, session.id, session.name]);
   useEffect(() => { window.dispatchEvent(new CustomEvent("studyos:chat-translation-status", { detail: { pending: translationBusy, target: translationTarget, untranslatedMessageCount } })); }, [translationBusy, translationTarget, untranslatedMessageCount]);
-  const streamChat = async (payload: { sessionName: string; materials: string; translate: boolean; responseStyle: "Fast" | "Balanced" | "Deep" | "Concise" | "Detailed"; model: "gpt-5-mini" | "claude-haiku-4-5" | "gemini-3-flash-preview" | "local-9router"; aiName: string; history: Array<{ role: "user" | "assistant"; content: string }>; continueAnswer?: boolean; resumePrefix?: string }) => {
+  const streamChat = async (payload: { sessionName: string; materials: string; translate: boolean; responseStyle: "Fast" | "Balanced" | "Deep" | "Concise" | "Detailed"; model: "active"; aiName: string; history: Array<{ role: "user" | "assistant"; content: string }>; continueAnswer?: boolean; resumePrefix?: string }) => {
     const run = ++chatRunRef.current;
     const controller = new AbortController();
     streamAbortRef.current = controller;
@@ -468,8 +462,8 @@ export function ChatPanel({ session, onNewSession, onOpenDashboard, onOpenSessio
   useEffect(() => { if (!followLatestRef.current && !pendingScrollRef.current) return; scrollToLatest(pendingScrollRef.current ? "smooth" : "auto"); pendingScrollRef.current = false; }, [session.id, session.chatHistory.length, chat.isPending, continueAnswer.isPending, streaming, streamRecovery, streamedText]);
   const compactHistory = (history: Array<{ role: "user" | "assistant"; content: string }>) => history.filter((message) => message.content.trim().length > 0).slice(-30).map(({ role, content }) => ({ role, content: content.trim().slice(0, 6_000) }));
   const safeMaterials = (query: string, responseStyle: "Fast" | "Balanced" | "Deep" | "Concise" | "Detailed") => materialContext(session, query, responseStyle).slice(0, 10_000);
-  const send = () => { const content = input.trim(); if (!content || chat.isPending || continueAnswer.isPending || streaming || streamRecovery) return; const preferences = readAiSettings(); const payload = { sessionName: session.name, materials: safeMaterials(content, preferences.responseStyle), translate: false, responseStyle: preferences.responseStyle, model: preferences.model, aiName, history: [...compactHistory(session.chatHistory.slice(-29)), { role: "user" as const, content }] }; setError(""); pendingScrollRef.current = true; addMessage(session.id, { role: "user", content }); setInput(""); scrollToLatest(); pendingScrollRef.current = false; void streamChat(payload); };
-  const continueTruncatedAnswer = () => { if (chat.isPending || streaming || streamRecovery) return; const preferences = readAiSettings(); const priorQuestion = [...session.chatHistory].reverse().find((message) => message.role === "user")?.content ?? ""; setError(""); pendingScrollRef.current = true; scrollToLatest(); pendingScrollRef.current = false; void streamChat({ sessionName: session.name, materials: safeMaterials(priorQuestion, preferences.responseStyle), translate: false, responseStyle: preferences.responseStyle, model: preferences.model, aiName, history: compactHistory(session.chatHistory.slice(-30)), continueAnswer: true }); };
+  const send = () => { const content = input.trim(); if (!content || chat.isPending || continueAnswer.isPending || streaming || streamRecovery) return; const preferences = readAiPreferences(); const payload = { sessionName: session.name, materials: safeMaterials(content, preferences.responseStyle), translate: false, responseStyle: preferences.responseStyle, model: preferences.model, aiName, history: [...compactHistory(session.chatHistory.slice(-29)), { role: "user" as const, content }] }; setError(""); pendingScrollRef.current = true; addMessage(session.id, { role: "user", content }); setInput(""); scrollToLatest(); pendingScrollRef.current = false; void streamChat(payload); };
+  const continueTruncatedAnswer = () => { if (chat.isPending || streaming || streamRecovery) return; const preferences = readAiPreferences(); const priorQuestion = [...session.chatHistory].reverse().find((message) => message.role === "user")?.content ?? ""; setError(""); pendingScrollRef.current = true; scrollToLatest(); pendingScrollRef.current = false; void streamChat({ sessionName: session.name, materials: safeMaterials(priorQuestion, preferences.responseStyle), translate: false, responseStyle: preferences.responseStyle, model: preferences.model, aiName, history: compactHistory(session.chatHistory.slice(-30)), continueAnswer: true }); };
   const toggleChatTranslation = () => {
     if (translationBusy) return;
     const nextTarget = translateChat && untranslatedMessageCount > 0 ? translationTarget : nextChatTranslationTarget(session.chatHistory, translateChat, translationTarget);
@@ -529,7 +523,7 @@ export function WatchPanel({ session }: { session: StudySession }) {
   const { updateSession, saveQuizResult, addNote, updateNote, deleteNote, reviewVocabulary } = useStudyStore();
   const sourceAi = useSourceAiActivity();
   const watchTimer = useWatchTimer();
-  const preferences = readAiSettings();
+  const preferences = readAiPreferences();
   const [openQuiz, setOpenQuiz] = useState<Quiz | null>(null);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -619,6 +613,5 @@ function fileAsDataUrl(file: File) { return new Promise<string>((resolve, reject
 function documentMimeType(file: File): "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "text/plain" | "text/markdown" | "text/csv" | null { const name = file.name.toLowerCase(); if (file.type === "application/pdf" || name.endsWith(".pdf")) return "application/pdf"; if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || name.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; if (file.type === "text/markdown" || name.endsWith(".md") || name.endsWith(".markdown")) return "text/markdown"; if (file.type === "text/csv" || name.endsWith(".csv")) return "text/csv"; if (file.type === "text/plain" || name.endsWith(".txt")) return "text/plain"; return null; }
 function displaySourceDomain(value: string) { try { return new URL(value).hostname.replace(/^www\./, ""); } catch { return ""; } }
 function formatClock(seconds: number) { const mins = Math.floor(seconds / 60).toString().padStart(2, "0"); const secs = (seconds % 60).toString().padStart(2, "0"); return `${mins}:${secs}`; }
-function readAiSettings(): { model: "gpt-5-mini" | "claude-haiku-4-5" | "gemini-3-flash-preview" | "local-9router"; responseStyle: "Fast" | "Balanced" | "Deep" } { const model = localStorage.getItem("studyos_ai_model"); const responseStyle = localStorage.getItem("studyos_ai_style"); return { model: model === "claude-haiku-4-5" || model === "gemini-3-flash-preview" || model === "gpt-5-mini" || model === "local-9router" ? model : "gpt-5-mini", responseStyle: responseStyle === "Fast" || responseStyle === "Concise" ? "Fast" : responseStyle === "Deep" || responseStyle === "Detailed" ? "Deep" : "Balanced" }; }
 function extractText(html: string) { const doc = new DOMParser().parseFromString(html, "text/html"); doc.querySelectorAll("script, style, nav, footer, header, noscript").forEach((node) => node.remove()); return doc.body.textContent?.replace(/\s+/g, " ").trim() ?? ""; }
 function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

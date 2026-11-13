@@ -1,5 +1,6 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
+import { isLocalStudyMode } from "../runtimeMode";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -8,11 +9,11 @@ export type TrpcContext = {
 };
 
 export async function createContext(
-  opts: CreateExpressContextOptions
+  opts: Pick<CreateExpressContextOptions, "req" | "res">
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
-  if (process.env.STUDYOS_LOCAL_MODE !== "true") {
+  if (!isLocalStudyMode()) {
     try {
       const { sdk } = await import("./sdk");
       user = await sdk.authenticateRequest(opts.req);

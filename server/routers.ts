@@ -5,17 +5,17 @@ import { isIP } from "node:net";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { decodeAvatarImage } from "./avatarUpload";
-import { apiKeySuffix, decryptProviderCredential, encryptProviderCredential } from "./aiCredentials";
-import { deleteAiProviderCredential, getAiProviderCredential, saveAiProviderCredential } from "./db";
 import { decodeAndExtractDocument } from "./documentImport";
-import { getGoogleGeminiStatus, invokeGoogleGemini } from "./googleGemini";
-import { ENV } from "./_core/env";
-import { getLocalAiRouterConfig, invokeLocalAiRouter, LOCAL_AI_ROUTER_MODEL, LOCAL_QUIZ_TIMEOUT_MS, localAiRouterLabel } from "./localAiRouter";
-import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
 import { searchSources } from "./sourceSearch";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, router } from "./_core/trpc";
+import type { ResolvedAiConnection } from "@shared/ai-connections";
+import { requireAiAccess } from "./ai/access";
+import { getActiveConnection } from "./ai/connection-store";
+import { aiConnectionsRouter } from "./ai/connections-router";
+import { invokeConnection } from "./ai/transport";
+import { isLocalStudyMode } from "./runtimeMode";
 
 const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -31,7 +31,7 @@ const responseStyleSchema = z.enum(["Fast", "Balanced", "Deep", "Concise", "Deta
 type ResponseStyle = z.infer<typeof responseStyleSchema>;
 type ResponseMode = "Fast" | "Balanced" | "Deep";
 
-const studyModelSchema = z.enum(["gpt-5-mini", "claude-haiku-4-5", "gemini-3-flash-preview", LOCAL_AI_ROUTER_MODEL]);
+const studyModelSchema = z.literal("active");
 export type StudyModel = z.infer<typeof studyModelSchema>;
 
 const aiInputSchema = z.object({
@@ -39,7 +39,7 @@ const aiInputSchema = z.object({
   materials: z.string().max(10000),
   translate: z.boolean().default(false),
   responseStyle: responseStyleSchema,
-  model: studyModelSchema.default("gpt-5-mini"),
+  model: studyModelSchema.default("active"),
   aiName: z.string().max(80).optional(),
 });
 
@@ -83,14 +83,6 @@ export function responseTokenBudget(task: "chat" | "continue" | "explain" | "qui
   return budgets[mode][task];
 }
 
-export function providerTimeoutMs(responseStyle: ResponseStyle) {
-  return responseMode(responseStyle) === "Fast" ? 8_000 : responseMode(responseStyle) === "Deep" ? 22_000 : 14_000;
-}
-
-const LOCAL_SELECTION_TIMEOUT_MS = 30_000;
-function localSelectionTimeoutMs(model: StudyModel) {
-  return model === LOCAL_AI_ROUTER_MODEL && getLocalAiRouterConfig().enabled ? LOCAL_SELECTION_TIMEOUT_MS : undefined;
-}
 
 export function aiCompanionName(value?: string) {
   const normalized = (value ?? "").replace(/[^a-zA-Z0-9 .'-]/g, "").replace(/\s+/g, " ").trim().slice(0, 32);
@@ -116,23 +108,6 @@ export type StudyCitation = { title: string; ordinal: number };
 type StudyAIResult = { text: string; citations: StudyCitation[]; truncated: boolean; provider: string };
 type StudyJsonSchema = { name: string; schema: Record<string, unknown> };
 const sourceTagPattern = /\[Source:\s*([^\]\n]+?)\s*[·-]\s*part\s*(\d+)\s*\]/gi;
-const GEMINI_PROVIDER = "google-gemini";
-
-export function builtInProviderLabel(model: "gpt-5-mini" | "claude-haiku-4-5") {
-  return model === "claude-haiku-4-5" ? "StudyOS AI gateway · Claude Haiku" : "StudyOS AI gateway · GPT-5 mini";
-}
-
-export async function personalGeminiAccess(userId?: number) {
-  if (!userId) return { apiKey: undefined, source: "server" as const };
-  const credential = await getAiProviderCredential(userId, GEMINI_PROVIDER);
-  if (!credential) return { apiKey: undefined, source: "server" as const };
-  try {
-    return { apiKey: decryptProviderCredential(credential.encryptedKey), source: "personal" as const };
-  } catch (error) {
-    console.error("[StudyOS AI] Unable to decrypt a personal Gemini credential", { userId, error: error instanceof Error ? error.name : "unknown" });
-    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Your saved Gemini key could not be read. Open AI Settings and save it again." });
-  }
-}
 
 export function extractStudyCitations(content: string): StudyCitation[] {
   const citations: StudyCitation[] = [];
@@ -308,8 +283,8 @@ function parseVocabularyDraft(content: string) {
   throw new TRPCError({ code: "BAD_GATEWAY", message: "StudyOS AI returned an invalid vocabulary translation. Please try again." });
 }
 
-function isLocalEmptyVocabularyResponse(error: unknown, model: StudyModel) {
-  return model === LOCAL_AI_ROUTER_MODEL && getLocalAiRouterConfig().enabled && error instanceof TRPCError && error.code === "BAD_GATEWAY" && /9router lokal mengembalikan respons kosong/i.test(error.message);
+function isEmptyVocabularyResponse(error: unknown) {
+  return error instanceof TRPCError && error.code === "BAD_GATEWAY" && /(?:empty (?:AI )?(?:response|output)|no visible text|respons kosong)/i.test(error.message);
 }
 
 const rawQuizQuestionSchema = z.object({
@@ -327,8 +302,8 @@ function normalizeQuizCorrectIndex(value: unknown, options: string[]) {
   if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value < options.length) return value;
   if (typeof value === "string") {
     const text = value.trim();
-    if (/^[A-D]$/i.test(text)) return text.toUpperCase().charCodeAt(0) - 65;
-    if (/^[0-3]$/.test(text)) return Number(text);
+    if (/^[A-D]$/i.test(text) && text.toUpperCase().charCodeAt(0) - 65 < options.length) return text.toUpperCase().charCodeAt(0) - 65;
+    if (/^[0-3]$/.test(text) && Number(text) < options.length) return Number(text);
     const optionIndex = options.findIndex((option) => option.trim().toLowerCase() === text.toLowerCase());
     if (optionIndex >= 0) return optionIndex;
   }
@@ -344,92 +319,24 @@ export function parseQuizQuestions(content: string, settings: z.infer<typeof qui
   }));
 }
 
-function aiText(response: Awaited<ReturnType<typeof invokeLLM>>) {
-  const content = response?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) {
-    console.error("[StudyOS AI] Unexpected response shape", { hasChoices: Array.isArray(response?.choices), model: response?.model });
-    throw new TRPCError({ code: "BAD_GATEWAY", message: "The AI service returned an empty response. Please try again." });
-  }
-  const finishReason = response.choices[0]?.finish_reason?.toLowerCase();
-  return { text: content.trim(), truncated: finishReason === "length" || finishReason === "max_tokens" };
+type StudyMessage = { role: "system" | "user" | "assistant"; content: string };
+
+// Access is checked before the store decrypts a managed key. One immutable
+// connection snapshot is reused by all batches and bounded repair attempts.
+const aiProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  requireAiAccess(ctx.req, ctx.user);
+  const aiConnection = await getActiveConnection();
+  return next({ ctx: { ...ctx, aiConnection } });
+});
+
+export async function invokeStudyAI(_model: StudyModel, messages: StudyMessage[], maxTokens: number, _responseStyle: ResponseStyle, json: boolean | StudyJsonSchema, connection: ResolvedAiConnection, timeoutMs = connection.timeoutMs) {
+  const result = await invokeConnection(connection, messages, { maxTokens, json: Boolean(json), timeoutMs });
+  if (json) return { ...result, citations: [] } satisfies StudyAIResult;
+  return { ...formatStudyResponse(result.text), truncated: result.truncated, provider: result.provider } satisfies StudyAIResult;
 }
 
-function providerUnavailableError(error: unknown) {
-  const detail = error instanceof Error ? error.message : String(error ?? "");
-  if (/(?:usage exhausted|quota(?:\s+(?:is\s+)?)?(?:exhausted|exceeded|unavailable)|resource exhausted|billing status|status 429|status 412)/i.test(detail)) {
-    return new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Kuota AI provider untuk proyek ini habis. Coba lagi setelah kuota tersedia atau gunakan provider/key lain yang masih aktif.",
-    });
-  }
-  return new TRPCError({ code: "BAD_GATEWAY", message: "StudyOS AI is temporarily unavailable. Please try again." });
-}
-
-export async function invokeStudyAI(model: StudyModel, messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, responseStyle: ResponseStyle, json: boolean | StudyJsonSchema = false, geminiAccess?: { apiKey?: string; source: "personal" | "server" }, timeoutMs = providerTimeoutMs(responseStyle)) {
-  const jsonSchema = typeof json === "object" ? json : { name: "studyos_json", schema: { type: "object", additionalProperties: true } };
-  let response: { text: string; truncated: boolean };
-  let provider: string;
-  if (model === LOCAL_AI_ROUTER_MODEL) {
-    response = await invokeLocalAiRouter({ messages, maxTokens, json: Boolean(json), timeoutMs });
-    provider = localAiRouterLabel();
-    if (json) return { text: response.text, citations: [], truncated: response.truncated, provider } satisfies StudyAIResult;
-    return { ...formatStudyResponse(response.text), truncated: response.truncated, provider } satisfies StudyAIResult;
-  }
-  if (getLocalAiRouterConfig().localMode) {
-    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Mode StudyOS lokal hanya memakai 9router. Pilih 9router lokal di AI Settings." });
-  }
-  const invokeBuiltIn = async (candidate: "gpt-5-mini" | "claude-haiku-4-5") => aiText(await invokeLLM({
-    model: candidate,
-    messages,
-    maxTokens,
-    maxRetries: responseMode(responseStyle) === "Fast" ? 0 : responseMode(responseStyle) === "Balanced" ? 1 : 2,
-  }));
-  if (model === "gemini-3-flash-preview") {
-    try {
-      response = await invokeGoogleGemini({ messages, maxTokens, json: Boolean(json), ...(typeof json === "object" ? { jsonSchema: json.schema } : {}), apiKey: geminiAccess?.apiKey, timeoutMs });
-      provider = geminiAccess?.source === "personal" ? "Google Gemini · personal key" : "Google Gemini · server key";
-    } catch (error) {
-      const code = error instanceof TRPCError ? error.code : "UNAVAILABLE";
-      console.warn("[StudyOS AI] Google Gemini unavailable; using built-in fallback", { code });
-      if (error instanceof TRPCError && (error.code === "TOO_MANY_REQUESTS" || error.code === "SERVICE_UNAVAILABLE")) throw error;
-      if (geminiAccess?.source === "personal") throw error;
-      try {
-        response = await invokeBuiltIn("gpt-5-mini");
-        provider = "StudyOS AI gateway · GPT-5 mini fallback";
-      } catch (fallbackError) {
-        console.warn("[StudyOS AI] GPT fallback unavailable; trying Claude Haiku", fallbackError);
-        try {
-          response = await invokeBuiltIn("claude-haiku-4-5");
-          provider = "StudyOS AI gateway · Claude Haiku fallback";
-        } catch (secondFallbackError) {
-          console.error("[StudyOS AI] Built-in fallbacks failed", secondFallbackError);
-          throw providerUnavailableError(secondFallbackError);
-        }
-      }
-    }
-  } else {
-    try {
-      response = await invokeBuiltIn(model);
-      provider = builtInProviderLabel(model);
-    } catch (error) {
-      const fallbackModel = model === "gpt-5-mini" ? "claude-haiku-4-5" : "gpt-5-mini";
-      console.warn("[StudyOS AI] Selected gateway model unavailable; using alternate fallback", { model, fallbackModel });
-      try {
-        response = await invokeBuiltIn(fallbackModel);
-        provider = `${builtInProviderLabel(fallbackModel)} fallback`;
-      } catch (fallbackError) {
-        console.error("[StudyOS AI] Alternate gateway fallback also failed", fallbackError);
-        throw providerUnavailableError(fallbackError);
-      }
-    }
-  }
-  if (json) return { text: response.text, citations: [], truncated: response.truncated, provider } satisfies StudyAIResult;
-  return { ...formatStudyResponse(response.text), truncated: response.truncated, provider } satisfies StudyAIResult;
-}
-
-async function invokeStudyAIForUser(userId: number | undefined, model: StudyModel, messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, responseStyle: ResponseStyle, json: boolean | StudyJsonSchema = false, timeoutMs?: number) {
-  const geminiAccess = model === "gemini-3-flash-preview" ? await personalGeminiAccess(userId) : undefined;
-  return invokeStudyAI(model, messages, maxTokens, responseStyle, json, geminiAccess, timeoutMs);
+function invokeStudyAIForConnection(connection: ResolvedAiConnection, model: StudyModel, messages: StudyMessage[], maxTokens: number, responseStyle: ResponseStyle, json: boolean | StudyJsonSchema = false, timeoutMs?: number) {
+  return invokeStudyAI(model, messages, maxTokens, responseStyle, json, connection, timeoutMs);
 }
 
 function isPrivateAddress(address: string) {
@@ -472,6 +379,7 @@ async function readLimitedText(response: Response) {
 
 export const appRouter = router({
   system: systemRouter,
+  aiConnections: aiConnectionsRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -481,47 +389,12 @@ export const appRouter = router({
     }),
   }),
   study: router({
-    googleGeminiStatus: publicProcedure.query(() => getGoogleGeminiStatus()),
-    localAiRouterStatus: publicProcedure.query(() => {
-      const config = getLocalAiRouterConfig();
-      return { enabled: config.enabled, configured: config.configured, model: config.model ?? null };
-    }),
-    personalGeminiStatus: protectedProcedure.query(async ({ ctx }) => {
-      const credential = await getAiProviderCredential(ctx.user.id, GEMINI_PROVIDER);
-      return { configured: Boolean(credential), keySuffix: credential?.keySuffix ?? null, model: "gemini-3.6-flash" };
-    }),
-    savePersonalGeminiKey: protectedProcedure
-      .input(z.object({ apiKey: z.string().trim().min(20).max(500) }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await saveAiProviderCredential({
-            userId: ctx.user.id,
-            provider: GEMINI_PROVIDER,
-            encryptedKey: encryptProviderCredential(input.apiKey),
-            keySuffix: apiKeySuffix(input.apiKey),
-          });
-          return { configured: true, keySuffix: apiKeySuffix(input.apiKey) };
-        } catch (error) {
-          console.error("[StudyOS AI] Failed to save a personal Gemini credential", { userId: ctx.user.id, error: error instanceof Error ? error.name : "unknown" });
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS could not save that Gemini key. Please try again." });
-        }
-      }),
-    removePersonalGeminiKey: protectedProcedure
-      .mutation(async ({ ctx }) => {
-        try {
-          await deleteAiProviderCredential(ctx.user.id, GEMINI_PROVIDER);
-          return { configured: false };
-        } catch (error) {
-          console.error("[StudyOS AI] Failed to remove a personal Gemini credential", { userId: ctx.user.id, error: error instanceof Error ? error.name : "unknown" });
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS could not remove that Gemini key. Please try again." });
-        }
-      }),
     uploadAvatar: publicProcedure
       .input(z.object({ imageDataUrl: z.string().min(32).max(2_100_000) }))
       .mutation(async ({ input }) => {
         try {
           const image = decodeAvatarImage(input.imageDataUrl);
-          if (getLocalAiRouterConfig().localMode) {
+          if (isLocalStudyMode()) {
             return { url: input.imageDataUrl };
           }
           const { url } = await storagePut(`studyos/avatars/profile.${image.extension}`, image.bytes, image.contentType);
@@ -542,7 +415,7 @@ export const appRouter = router({
         try {
           const document = await decodeAndExtractDocument(input);
           const safeName = input.name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || `study-material.${document.extension}`;
-          if (getLocalAiRouterConfig().localMode) {
+          if (isLocalStudyMode()) {
             return { title: input.name, url: "", content: document.content, format: document.format };
           }
           const { url } = await storagePut(`studyos/materials/${Date.now()}-${safeName}`, document.bytes, document.contentType);
@@ -581,28 +454,25 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_GATEWAY", message: "Search belum tersedia saat ini. Coba lagi beberapa saat lagi." });
         }
       }),
-    chat: publicProcedure
+    chat: aiProcedure
       .input(aiInputSchema.extend({ history: z.array(chatMessageSchema).max(30) }))
       .mutation(async ({ input, ctx }) => {
         try {
-          const result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+          const result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
             { role: "system", content: systemPrompt(input.sessionName, input.materials, input.translate, input.responseStyle, input.aiName) },
             ...input.history.map((message) => ({ role: message.role, content: message.content })),
           ], responseTokenBudget("chat", input.responseStyle), input.responseStyle);
           return result;
         } catch (error) {
-          if (error instanceof TRPCError && error.code === "PRECONDITION_FAILED") {
-            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Respons Chat belum tersedia karena kuota AI provider untuk proyek ini habis. Pesan kamu tetap aman. Coba lagi setelah kuota tersedia atau gunakan provider/key lain yang masih aktif." });
-          }
           if (error instanceof TRPCError) throw error;
           console.error("[StudyOS AI chat]", error);
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS AI is temporarily unavailable. Please try again." });
         }
       }),
-    translateChat: publicProcedure
+    translateChat: aiProcedure
       .input(z.object({
         messages: z.array(chatTranslationItemSchema).min(1).max(6),
-        model: studyModelSchema.default("gpt-5-mini"),
+        model: studyModelSchema.default("active"),
         target: z.enum(["english", "indonesian"]),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -636,10 +506,10 @@ export const appRouter = router({
             const characterCount = batch.reduce((total, message) => total + message.content.length, 0);
             const outputBudget = Math.min(1_600, Math.max(450, Math.ceil(characterCount * 0.8) + 220));
             const requestTranslation = async (system: string) => {
-              const result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+              const result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
                 { role: "system", content: system },
                 { role: "user", content: JSON.stringify({ messages: batch }) },
-              ], outputBudget, "Balanced", translationSchema, 45_000);
+              ], outputBudget, "Balanced", translationSchema, ctx.aiConnection.timeoutMs);
               if (result.truncated) throw new TRPCError({ code: "BAD_GATEWAY", message: "Translation JSON was truncated." });
               return parseChatTranslations(result.text, batch.map((message) => message.id));
             };
@@ -650,6 +520,9 @@ export const appRouter = router({
                 `Translate every supplied message into ${input.target === "english" ? "natural English" : "natural Bahasa Indonesia"}. Do not leave a message unchanged when it clearly uses the opposite language.`,
                 "Return JSON only in exactly this shape: {\"translations\":[{\"id\":\"original id\",\"content\":\"translation\"}]}. Return every supplied id exactly once. Do not add any explanation.",
               ].join("\n\n"));
+              if (copiedOppositeLanguageSource(batch, translated, input.target)) {
+                throw new TRPCError({ code: "BAD_GATEWAY", message: "The AI service repeated the original text instead of translating it. Try again or choose a different model." });
+              }
             }
             const originals = batch.map((message) => ({ id: message.id, content: message.content }));
             return input.target === "english"
@@ -660,19 +533,16 @@ export const appRouter = router({
           for (const batch of translationBatches(input.messages)) caches.push(await translateBatch(batch));
           return { translations: mergeTranslationCaches(caches) };
         } catch (error) {
-          if (error instanceof TRPCError && error.code === "PRECONDITION_FAILED") {
-            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Penerjemahan Chat tidak tersedia karena kuota AI provider untuk proyek ini habis. Teks asli tetap aman. Coba lagi setelah kuota tersedia atau gunakan provider/key lain yang masih aktif." });
-          }
           if (error instanceof TRPCError) throw error;
           console.error("[StudyOS Chat translation]", error);
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS could not translate this chat yet. Please try again." });
         }
       }),
-    continue: publicProcedure
+    continue: aiProcedure
       .input(aiInputSchema.extend({ history: z.array(chatMessageSchema).min(1).max(31) }))
       .mutation(async ({ input, ctx }) => {
         try {
-          const result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+          const result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
             { role: "system", content: systemPrompt(input.sessionName, input.materials, input.translate, input.responseStyle, input.aiName) },
             ...input.history.map((message) => ({ role: message.role, content: message.content })),
             { role: "user", content: "Continue the immediately preceding answer exactly where it stopped. Do not repeat its opening or recap it; finish the remaining explanation naturally and cite any source-based paragraphs." },
@@ -684,14 +554,14 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS AI could not continue that answer. Please try again." });
         }
       }),
-    explain: publicProcedure
+    explain: aiProcedure
       .input(aiInputSchema.extend({ selection: z.string().min(1).max(3000) }))
       .mutation(async ({ input, ctx }) => {
         try {
-          const result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+          const result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
             { role: "system", content: systemPrompt(input.sessionName, input.materials, input.translate, input.responseStyle) },
             { role: "user", content: `Explain this selected text in a clear learning-focused way. Include a concise definition, why it matters, and one simple example when appropriate:\n\n${input.selection}` },
-          ], responseTokenBudget("explain", input.responseStyle), input.responseStyle, false, localSelectionTimeoutMs(input.model));
+          ], responseTokenBudget("explain", input.responseStyle), input.responseStyle, false, ctx.aiConnection.timeoutMs);
           return result;
         } catch (error) {
           if (error instanceof TRPCError) throw error;
@@ -699,11 +569,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS AI could not explain that selection. Please try again." });
         }
       }),
-    draftKeyTerm: publicProcedure
+    draftKeyTerm: aiProcedure
       .input(aiInputSchema.extend({ selection: z.string().min(1).max(2000) }))
       .mutation(async ({ input, ctx }) => {
         try {
-          const result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+          const result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
             { role: "system", content: [
               "You create concise, accurate Key Term flashcards for a personal study app.",
               sourceContext(input.materials),
@@ -724,7 +594,7 @@ export const appRouter = router({
               required: ["term", "definition", "context", "example"],
               additionalProperties: false,
             },
-          }, localSelectionTimeoutMs(input.model));
+          }, ctx.aiConnection.timeoutMs);
           return parseKeyTermDraft(result.text);
         } catch (error) {
           if (error instanceof TRPCError) throw error;
@@ -732,7 +602,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS AI could not prepare that Key Term. Please try again." });
         }
       }),
-    draftVocabulary: publicProcedure
+    draftVocabulary: aiProcedure
       .input(aiInputSchema.extend({ selection: z.string().min(1).max(240) }))
       .mutation(async ({ input, ctx }) => {
         try {
@@ -747,14 +617,14 @@ export const appRouter = router({
           ];
           let result;
           try {
-            result = await invokeStudyAIForUser(ctx.user?.id, input.model, messages, 250, input.responseStyle, false, localSelectionTimeoutMs(input.model));
+            result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, messages, 250, input.responseStyle, false, ctx.aiConnection.timeoutMs);
           } catch (error) {
-            if (!isLocalEmptyVocabularyResponse(error, input.model)) throw error;
-            console.warn("[StudyOS AI vocabulary draft] local router returned empty output; retrying once with a simpler prompt");
-            result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+            if (!isEmptyVocabularyResponse(error)) throw error;
+            // Retry a malformed empty response once on the same connection.
+            result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
               { role: "system", content: "Translate the selected foreign word or short phrase into Bahasa Indonesia. Reply with only valid JSON: {\"term\":\"selected word\",\"meaning\":\"short Indonesian translation\"}. No explanation." },
               { role: "user", content: input.selection },
-            ], 500, input.responseStyle, false, localSelectionTimeoutMs(input.model));
+            ], 500, input.responseStyle, false, ctx.aiConnection.timeoutMs);
           }
           return parseVocabularyDraft(result.text);
         } catch (error) {
@@ -763,7 +633,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "StudyOS AI could not translate that vocabulary. Please try again." });
         }
       }),
-    quiz: publicProcedure
+    quiz: aiProcedure
       .input(aiInputSchema.extend({ quiz: quizSettingsSchema }))
       .mutation(async ({ input, ctx }) => {
         if (!input.materials.trim()) {
@@ -771,19 +641,18 @@ export const appRouter = router({
         }
         try {
           const difficulty = input.quiz.difficulty === "easy" ? "Easy: recall clear facts and definitions." : input.quiz.difficulty === "hard" ? "Hard: test application, comparison, and reasoning from the material." : "Medium: test understanding and simple application from the material.";
-          const localQuizTimeoutMs = input.model === LOCAL_AI_ROUTER_MODEL && getLocalAiRouterConfig().enabled ? LOCAL_QUIZ_TIMEOUT_MS : undefined;
-          const result = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+          const quizTimeoutMs = ctx.aiConnection.timeoutMs;
+          const result = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
             { role: "system", content: `You create high-quality learning quizzes. Generate exactly ${input.quiz.questionCount} distinct multiple-choice questions based only on the supplied study material. Each question must have exactly ${input.quiz.optionCount} plausible options, one correct option, and a concise one-sentence explanation. ${difficulty} Keep every field short enough for all questions to fit. Return JSON only in this exact shape: {\"questions\":[{\"question\":\"...\",\"options\":[\"...\"],\"correct\":0,\"explanation\":\"...\"}]}. The correct field must be a zero-based number from 0 to ${input.quiz.optionCount - 1}; do not use correctIndex, answer, letters, or option text. No Markdown or commentary.` },
             { role: "user", content: `${sourceContext(input.materials)}\n\nGenerate the quiz for the session \"${input.sessionName}\".` },
-          ], responseTokenBudget("quiz", input.responseStyle), input.responseStyle, true, localQuizTimeoutMs);
+          ], responseTokenBudget("quiz", input.responseStyle), input.responseStyle, true, quizTimeoutMs);
           try {
             return { questions: parseQuizQuestions(result.text, input.quiz) };
           } catch (parseError) {
-            if (input.model !== LOCAL_AI_ROUTER_MODEL || !getLocalAiRouterConfig().enabled) throw parseError;
-            const repaired = await invokeStudyAIForUser(ctx.user?.id, input.model, [
+            const repaired = await invokeStudyAIForConnection(ctx.aiConnection, input.model, [
               { role: "system", content: `Reformat the supplied Quiz candidate into valid JSON only. Return exactly ${input.quiz.questionCount} questions with exactly ${input.quiz.optionCount} short options each. Use this shape: {\"questions\":[{\"question\":\"...\",\"options\":[\"...\"],\"correct\":0,\"explanation\":\"...\"}]}. correct must be a number 0 to ${input.quiz.optionCount - 1}. Do not add Markdown or commentary.` },
               { role: "user", content: `Quiz candidate to repair:\n${result.text.slice(0, 12_000)}` },
-            ], responseTokenBudget("quiz", input.responseStyle), input.responseStyle, true, localQuizTimeoutMs);
+            ], responseTokenBudget("quiz", input.responseStyle), input.responseStyle, true, quizTimeoutMs);
             try {
               return { questions: parseQuizQuestions(repaired.text, input.quiz) };
             } catch {

@@ -1,13 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TRPCError } from "@trpc/server";
 
-const { invokeLLM } = vi.hoisted(() => ({ invokeLLM: vi.fn() }));
-vi.mock("./_core/llm", () => ({ invokeLLM }));
+const { modelReply, getActiveConnection } = vi.hoisted(() => ({ modelReply: vi.fn(), getActiveConnection: vi.fn() }));
+const connection = { id: "00000000-0000-4000-8000-000000000001", name: "My connection", model: "study-model" };
+vi.mock("./ai/connection-store", () => ({ getActiveConnection }));
+vi.mock("./ai/transport", () => ({
+  invokeConnection: async (snapshot: unknown, messages: unknown, options: unknown) => {
+    const reply = await modelReply({ connection: snapshot, messages, ...(options as object) });
+    const content = reply?.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) throw new TRPCError({ code: "BAD_GATEWAY", message: "The AI service returned an empty response." });
+    return { text: content.trim(), truncated: reply.choices[0]?.finish_reason === "length", provider: "My connection · study-model" };
+  },
+}));
+getActiveConnection.mockResolvedValue(connection);
+afterEach(() => {
+  modelReply.mockReset();
+  getActiveConnection.mockClear();
+});
 
 import { aiCompanionName, appRouter, formatStudyResponse, parseChatTranslations, parseKeyTermDraft, parseQuizQuestions, responseMode, responseTokenBudget, systemPrompt } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 function context(): TrpcContext {
-  return { user: null, req: {} as TrpcContext["req"], res: {} as TrpcContext["res"] };
+  return { user: null, req: { headers: { host: "localhost:3000" }, socket: { remoteAddress: "127.0.0.1" } } as TrpcContext["req"], res: {} as TrpcContext["res"] };
 }
 
 const materials = "[Source: Biology.pdf · part 1]\nPhotosynthesis converts light energy into chemical energy.";
@@ -33,13 +48,13 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("uses the natural study-companion persona and source grounding in chat", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: "Photosynthesis changes light into stored chemical energy. [Biology.pdf]" } }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: "Photosynthesis changes light into stored chemical energy. [Biology.pdf]" } }] });
     await appRouter.createCaller(context()).study.chat({
-      sessionName: "Plant biology", materials, translate: true, responseStyle: "Balanced", model: "gpt-5-mini",
+      sessionName: "Plant biology", materials, translate: true, responseStyle: "Balanced", model: "active",
       history: [{ role: "user", content: "Jelasin fotosintesis dong" }],
     });
 
-    const request = invokeLLM.mock.calls[0]?.[0];
+    const request = modelReply.mock.calls[0]?.[0];
     const prompt = request.messages[0].content as string;
     expect(prompt).toContain("Sound natural and human");
     expect(prompt).toContain("[Source: Biology.pdf · part 1]");
@@ -48,14 +63,14 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("prepares the requested translation direction and preserves every persisted chat message id", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({
       translations: [
         { id: "english-user", content: "Bisa jelaskan penyimpanan cloud?" },
         { id: "indonesian-ai", content: "Cloud storage menyimpan file lewat internet." },
       ],
     }) }, finish_reason: "stop" }] });
     const result = await appRouter.createCaller(context()).study.translateChat({
-      model: "gpt-5-mini",
+      model: "active",
       target: "indonesian",
       messages: [
         { id: "english-user", content: "Can you explain cloud storage?" },
@@ -73,26 +88,26 @@ describe("StudyOS AI prompt regression", () => {
         { id: "indonesian-ai", content: "Cloud storage menyimpan file lewat internet." },
       ],
     } });
-    const request = invokeLLM.mock.calls.at(-1)?.[0];
+    const request = modelReply.mock.calls.at(-1)?.[0];
     expect(request.messages[0].content).toContain("The opposite language will use the original chat text");
     expect(request.messages[0].content).toContain("Preserve Markdown");
   });
 
   it("retries an unchanged Indonesian translation response with a stricter instruction", async () => {
-    const callsBefore = invokeLLM.mock.calls.length;
-    invokeLLM
+    const callsBefore = modelReply.mock.calls.length;
+    modelReply
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ translations: [{ id: "local-ai", content: "Penyimpanan cloud menyimpan file lewat internet." }] }) }, finish_reason: "stop" }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ translations: [{ id: "local-ai", content: "Cloud storage stores files over the internet." }] }) }, finish_reason: "stop" }] });
 
     const result = await appRouter.createCaller(context()).study.translateChat({
-      model: "gpt-5-mini",
+      model: "active",
       target: "english",
       messages: [{ id: "local-ai", content: "Penyimpanan cloud menyimpan file lewat internet." }],
     });
 
     expect(result.translations.english).toEqual([{ id: "local-ai", content: "Cloud storage stores files over the internet." }]);
-    expect(invokeLLM).toHaveBeenCalledTimes(callsBefore + 2);
-    expect(invokeLLM.mock.calls.at(-1)?.[0].messages[0].content).toContain("previous answer was rejected");
+    expect(modelReply).toHaveBeenCalledTimes(callsBefore + 2);
+    expect(modelReply.mock.calls.at(-1)?.[0].messages[0].content).toContain("previous answer was rejected");
   });
 
   it("rejects incomplete translation JSON instead of assigning text to the wrong chat bubble", () => {
@@ -100,16 +115,16 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("keeps the supplied chunk labels in quiz generation", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ questions: Array.from({ length: 5 }, (_, index) => ({ question: `Question ${index + 1}`, options: ["A", "B", "C", "D"], correct: 0, explanation: "Because the source says so." })) }) } }] });
-    await appRouter.createCaller(context()).study.quiz({ sessionName: "Plant biology", materials, translate: false, responseStyle: "Balanced", model: "gpt-5-mini" });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ questions: Array.from({ length: 5 }, (_, index) => ({ question: `Question ${index + 1}`, options: ["A", "B", "C", "D"], correct: 0, explanation: "Because the source says so." })) }) } }] });
+    await appRouter.createCaller(context()).study.quiz({ sessionName: "Plant biology", materials, translate: false, responseStyle: "Balanced", model: "active" });
 
-    const request = invokeLLM.mock.calls.at(-1)?.[0];
+    const request = modelReply.mock.calls.at(-1)?.[0];
     expect(request.messages[1].content).toContain("[Source: Biology.pdf · part 1]");
   });
 
   it("accepts a quiz JSON payload wrapped in a Markdown code fence", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: "```json\n{\"questions\":[{\"question\":\"What powers photosynthesis?\",\"options\":[\"Light\",\"Sound\",\"Wind\",\"Heat\"],\"correct\":0,\"explanation\":\"Light provides energy.\"},{\"question\":\"Where does photosynthesis happen?\",\"options\":[\"Chloroplasts\",\"Roots\",\"Ribosomes\",\"Nuclei\"],\"correct\":0,\"explanation\":\"Chloroplasts capture light.\"},{\"question\":\"What gas is used?\",\"options\":[\"Carbon dioxide\",\"Oxygen\",\"Helium\",\"Nitrogen\"],\"correct\":0,\"explanation\":\"Plants use carbon dioxide.\"},{\"question\":\"What is produced?\",\"options\":[\"Glucose\",\"Salt\",\"Iron\",\"Water only\"],\"correct\":0,\"explanation\":\"Glucose stores energy.\"},{\"question\":\"What pigment helps?\",\"options\":[\"Chlorophyll\",\"Keratin\",\"Insulin\",\"Collagen\"],\"correct\":0,\"explanation\":\"Chlorophyll absorbs light.\"}]}\n```" }, finish_reason: "stop" }] });
-    await expect(appRouter.createCaller(context()).study.quiz({ sessionName: "Plant biology", materials, translate: false, responseStyle: "Balanced", model: "gpt-5-mini" })).resolves.toHaveProperty("questions", expect.any(Array));
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: "```json\n{\"questions\":[{\"question\":\"What powers photosynthesis?\",\"options\":[\"Light\",\"Sound\",\"Wind\",\"Heat\"],\"correct\":0,\"explanation\":\"Light provides energy.\"},{\"question\":\"Where does photosynthesis happen?\",\"options\":[\"Chloroplasts\",\"Roots\",\"Ribosomes\",\"Nuclei\"],\"correct\":0,\"explanation\":\"Chloroplasts capture light.\"},{\"question\":\"What gas is used?\",\"options\":[\"Carbon dioxide\",\"Oxygen\",\"Helium\",\"Nitrogen\"],\"correct\":0,\"explanation\":\"Plants use carbon dioxide.\"},{\"question\":\"What is produced?\",\"options\":[\"Glucose\",\"Salt\",\"Iron\",\"Water only\"],\"correct\":0,\"explanation\":\"Glucose stores energy.\"},{\"question\":\"What pigment helps?\",\"options\":[\"Chlorophyll\",\"Keratin\",\"Insulin\",\"Collagen\"],\"correct\":0,\"explanation\":\"Chlorophyll absorbs light.\"}]}\n```" }, finish_reason: "stop" }] });
+    await expect(appRouter.createCaller(context()).study.quiz({ sessionName: "Plant biology", materials, translate: false, responseStyle: "Balanced", model: "active" })).resolves.toHaveProperty("questions", expect.any(Array));
   });
 
   it("normalizes a fallback Quiz answer key supplied as correctIndex", () => {
@@ -118,14 +133,14 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("returns clean chat text, structured citations, and a continuation signal when a model reaches its output limit", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: "Fotosintesis mengubah cahaya menjadi energi kimia. [Source: Biology.pdf · part 1]", }, finish_reason: "length" }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: "Fotosintesis mengubah cahaya menjadi energi kimia. [Source: Biology.pdf · part 1]", }, finish_reason: "length" }] });
     const result = await appRouter.createCaller(context()).study.chat({
-      sessionName: "Plant biology", materials, translate: true, responseStyle: "Balanced", model: "gpt-5-mini",
+      sessionName: "Plant biology", materials, translate: true, responseStyle: "Balanced", model: "active",
       history: [{ role: "user", content: "Jelasin fotosintesis dong" }],
     });
 
-    expect(result).toEqual({ text: "Fotosintesis mengubah cahaya menjadi energi kimia.", citations: [{ title: "Biology.pdf", ordinal: 1 }], truncated: true, provider: "StudyOS AI gateway · GPT-5 mini" });
-    expect(invokeLLM.mock.calls.at(-1)?.[0]?.maxTokens).toBe(2400);
+    expect(result).toEqual({ text: "Fotosintesis mengubah cahaya menjadi energi kimia.", citations: [{ title: "Biology.pdf", ordinal: 1 }], truncated: true, provider: "My connection · study-model" });
+    expect(modelReply.mock.calls.at(-1)?.[0]?.maxTokens).toBe(2400);
   });
 
   it("extracts and removes raw source labels before the answer reaches the chat UI", () => {
@@ -133,26 +148,26 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("continues the latest answer with the larger chat output budget", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: "Sisa penjelasan yang selesai. [Source: Biology.pdf · part 1]" }, finish_reason: "stop" }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: "Sisa penjelasan yang selesai. [Source: Biology.pdf · part 1]" }, finish_reason: "stop" }] });
     const result = await appRouter.createCaller(context()).study.continue({
-      sessionName: "Plant biology", materials, translate: true, responseStyle: "Balanced", model: "gpt-5-mini",
+      sessionName: "Plant biology", materials, translate: true, responseStyle: "Balanced", model: "active",
       history: [{ role: "user", content: "Jelaskan fotosintesis" }, { role: "assistant", content: "Fotosintesis adalah" }],
     });
 
-    expect(result).toEqual({ text: "Sisa penjelasan yang selesai.", citations: [{ title: "Biology.pdf", ordinal: 1 }], truncated: false, provider: "StudyOS AI gateway · GPT-5 mini" });
-    const request = invokeLLM.mock.calls.at(-1)?.[0];
+    expect(result).toEqual({ text: "Sisa penjelasan yang selesai.", citations: [{ title: "Biology.pdf", ordinal: 1 }], truncated: false, provider: "My connection · study-model" });
+    const request = modelReply.mock.calls.at(-1)?.[0];
     expect(request.maxTokens).toBe(2400);
     expect(request.messages.at(-1)?.content).toContain("Continue the immediately preceding answer");
   });
 
   it("returns a validated structured draft for a selected Key Term", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ term: "AWS S3", definition: "Object storage from AWS.", context: "The source describes S3 as durable cloud object storage.", example: "A study app can store uploaded PDFs in an S3 bucket." }) }, finish_reason: "stop" }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ term: "AWS S3", definition: "Object storage from AWS.", context: "The source describes S3 as durable cloud object storage.", example: "A study app can store uploaded PDFs in an S3 bucket." }) }, finish_reason: "stop" }] });
     const result = await appRouter.createCaller(context()).study.draftKeyTerm({
-      sessionName: "Cloud basics", materials: "[Source: Cloud.md · part 1]\nAWS S3 stores objects in buckets.", translate: true, responseStyle: "Balanced", model: "gpt-5-mini", selection: "AWS S3",
+      sessionName: "Cloud basics", materials: "[Source: Cloud.md · part 1]\nAWS S3 stores objects in buckets.", translate: true, responseStyle: "Balanced", model: "active", selection: "AWS S3",
     });
 
     expect(result).toEqual({ term: "AWS S3", definition: "Object storage from AWS.", context: "The source describes S3 as durable cloud object storage.", example: "A study app can store uploaded PDFs in an S3 bucket." });
-    const request = invokeLLM.mock.calls.at(-1)?.[0];
+    const request = modelReply.mock.calls.at(-1)?.[0];
     expect(request.maxTokens).toBe(700);
     expect(request.response_format).toBeUndefined();
     expect(request.messages[0].content).toContain("Make term the shortest standard name or acronym");
@@ -160,13 +175,13 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("returns a compact vocabulary translation without Key Term details", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ term: "resilient", meaning: "tangguh" }) }, finish_reason: "stop" }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ term: "resilient", meaning: "tangguh" }) }, finish_reason: "stop" }] });
     const result = await appRouter.createCaller(context()).study.draftVocabulary({
-      sessionName: "English vocabulary", materials: "", translate: false, responseStyle: "Balanced", model: "gpt-5-mini", selection: "resilient",
+      sessionName: "English vocabulary", materials: "", translate: false, responseStyle: "Balanced", model: "active", selection: "resilient",
     });
 
     expect(result).toEqual({ term: "resilient", meaning: "tangguh" });
-    const request = invokeLLM.mock.calls.at(-1)?.[0];
+    const request = modelReply.mock.calls.at(-1)?.[0];
     expect(request.maxTokens).toBe(250);
     expect(request.messages[0].content).toContain("minimal vocabulary cards");
     expect(request.messages[0].content).toContain("short, natural Bahasa Indonesia translation");
@@ -174,9 +189,9 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("returns a safe gateway error when a Key Term draft is not valid JSON", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: "This is not JSON." }, finish_reason: "stop" }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: "This is not JSON." }, finish_reason: "stop" }] });
     await expect(appRouter.createCaller(context()).study.draftKeyTerm({
-      sessionName: "Cloud basics", materials: "", translate: false, responseStyle: "Balanced", model: "gpt-5-mini", selection: "AWS S3",
+      sessionName: "Cloud basics", materials: "", translate: false, responseStyle: "Balanced", model: "active", selection: "AWS S3",
     })).rejects.toMatchObject({ code: "BAD_GATEWAY", message: "StudyOS AI returned an invalid Key Term draft. Please try again." });
   });
 
@@ -198,9 +213,9 @@ describe("StudyOS AI prompt regression", () => {
   });
 
   it("returns a usable draft through the router when a provider wraps JSON in Markdown", async () => {
-    invokeLLM.mockResolvedValueOnce({ choices: [{ message: { content: "```json\n{\"term\":\"Amazon S3\",\"definition\":\"Object storage AWS.\",\"context\":\"Stores objects in buckets.\",\"example\":\"Save a PDF in S3.\"}\n```" }, finish_reason: "stop" }] });
+    modelReply.mockResolvedValueOnce({ choices: [{ message: { content: "```json\n{\"term\":\"Amazon S3\",\"definition\":\"Object storage AWS.\",\"context\":\"Stores objects in buckets.\",\"example\":\"Save a PDF in S3.\"}\n```" }, finish_reason: "stop" }] });
     await expect(appRouter.createCaller(context()).study.draftKeyTerm({
-      sessionName: "Cloud basics", materials, translate: false, responseStyle: "Balanced", model: "gpt-5-mini", selection: "Amazon S3",
+      sessionName: "Cloud basics", materials, translate: false, responseStyle: "Balanced", model: "active", selection: "Amazon S3",
     })).resolves.toMatchObject({ term: "Amazon S3", context: "Stores objects in buckets." });
   });
 });

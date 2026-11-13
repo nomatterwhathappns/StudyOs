@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { storagePut } = vi.hoisted(() => ({ storagePut: vi.fn() }));
 vi.mock("./storage", () => ({ storagePut }));
@@ -11,7 +11,15 @@ function context(): TrpcContext {
 }
 
 describe("study.uploadDocument", () => {
-  beforeEach(() => storagePut.mockReset());
+  beforeEach(() => { storagePut.mockReset(); vi.stubEnv("STUDYOS_LOCAL_MODE", "false"); });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("imports text without cloud credentials in the default local mode", async () => {
+    vi.stubEnv("STUDYOS_LOCAL_MODE", undefined);
+    const dataUrl = `data:text/plain;base64,${Buffer.from("A locally stored study source.").toString("base64")}`;
+    await expect(appRouter.createCaller(context()).study.uploadDocument({ name: "local.txt", mimeType: "text/plain", dataUrl })).resolves.toEqual({ title: "local.txt", url: "", content: "A locally stored study source.", format: "TXT" });
+    expect(storagePut).not.toHaveBeenCalled();
+  });
 
   it("extracts text, stores the original file, and returns source metadata", async () => {
     storagePut.mockResolvedValueOnce({ key: "studyos/materials/biology.txt", url: "/manus-storage/biology.txt" });

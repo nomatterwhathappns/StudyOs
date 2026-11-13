@@ -26,9 +26,9 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Encrypted provider credentials owned by a single authenticated user.
- * The raw API key is never persisted in plaintext and is never returned to
- * browser procedures.
+ * Legacy credential table retained so existing database migrations/data are
+ * not dropped. AI Connections now uses the encrypted local server store;
+ * no current browser procedure reads or writes this table.
  */
 export const aiProviderCredentials = mysqlTable("aiProviderCredentials", {
   id: int("id").autoincrement().primaryKey(),

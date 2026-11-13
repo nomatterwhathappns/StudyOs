@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { registerStudyChatStream } from "../studyChatStream";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { isLocalStudyMode } from "../runtimeMode";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -30,7 +31,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 export async function createApp(server?: Server): Promise<Express> {
   const app = express();
-  const localStudyMode = process.env.STUDYOS_LOCAL_MODE === "true";
+  const localStudyMode = isLocalStudyMode();
 
   // Configure body parser with the existing local limit. Vercel upload limits
   // are handled separately by the deployment adapter and direct storage flow.

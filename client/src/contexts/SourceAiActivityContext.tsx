@@ -26,12 +26,12 @@ type SourceRequest = {
   sessionName: string;
   materials: string;
   responseStyle: "Fast" | "Balanced" | "Deep";
-  model: "gpt-5-mini" | "claude-haiku-4-5" | "gemini-3-flash-preview" | "local-9router";
+  model: "active";
   selection: string;
 };
 
 type QuizRequest = Omit<SourceRequest, "selection"> & { quiz: QuizGenerationSettings };
-type ChatTranslationRequest = { sessionId: string; sessionName: string; model: "gpt-5-mini" | "claude-haiku-4-5" | "gemini-3-flash-preview" | "local-9router"; target: ChatTranslationLanguage; messages: Array<{ id: string; content: string }> };
+type ChatTranslationRequest = { sessionId: string; sessionName: string; model: "active"; target: ChatTranslationLanguage; messages: Array<{ id: string; content: string }> };
 type ChatTranslationJob = Pick<ChatTranslationRequest, "target" | "messages">;
 
 type SourceAiActivityValue = {
