@@ -158,9 +158,11 @@ if (process.env.STUDYOS_VERIFY_DEPLOYMENT) {
   assert.equal(base.hash, "");
   const token = process.env.VERCEL_OIDC_TOKEN;
   assert(token, "Vercel production identity is unavailable.");
-  const request = async path => {
+  const request = async (path, options = {}) => {
     const response = await fetch(new URL(path, base), {
+      ...options,
       headers: {
+        ...options.headers,
         "x-vercel-trusted-oidc-idp-token": token,
         origin: base.origin,
       },
@@ -194,7 +196,30 @@ if (process.env.STUDYOS_VERIFY_DEPLOYMENT) {
     assert(response.headers.get("content-type")?.includes("text/html"));
     assert((await response.text()).includes('id="root"'));
   }
+  const { PDFDocument, StandardFonts } = await import("pdf-lib");
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  page.drawText("StudyOS deployment PDF verification", { x: 50, y: 700, font });
+  const document = await (
+    await request("/api/trpc/study.uploadDocument", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        json: {
+          name: "deployment-verification.pdf",
+          mimeType: "application/pdf",
+          dataUrl: `data:application/pdf;base64,${Buffer.from(await pdf.save()).toString("base64")}`,
+        },
+      }),
+    })
+  ).json();
+  assert(
+    document.result?.data?.json?.content?.includes(
+      "StudyOS deployment PDF verification"
+    )
+  );
   console.log(
-    "[StudyOS verification] Authenticated production HTTP routes, health, and private AI settings passed."
+    "[StudyOS verification] Authenticated production HTTP routes, health, private AI settings, and PDF import passed."
   );
 }
