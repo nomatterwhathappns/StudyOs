@@ -108,7 +108,7 @@ Untuk Vercel, [api/server.mjs](api/server.mjs) menjalankan backend, sedangkan [v
 
 Siapkan proyek, perlindungan seluruh deployment, Blob privat, dan environment infrastruktur sesuai [panduan Vercel](docs/setup/VERCEL.md). Setelah deployment siap, buka **Profile → AI Connections**, isi URL, protokol, key, dan model provider, lalu simpan serta aktifkan koneksi. Endpoint harus dapat dijangkau dari Vercel: `localhost` atau 9router pada laptop tidak dapat diakses langsung dari deployment.
 
-Build Vercel membatasi upload frontend ke 3 MB; build lainnya memakai 5 MB. Konfigurasi function menetapkan `maxDuration` 90 detik. Validasi batas platform, streaming, upload, dan izin administrator pada hosting tujuan. Implementasi ini belum menyediakan isolasi koneksi per pengguna untuk layanan multi-user.
+Build Vercel membatasi upload frontend ke 3 MB; build lainnya memakai 5 MB. Konfigurasi function menetapkan `maxDuration` 300 detik. Validasi batas platform, streaming, upload, dan izin administrator pada hosting tujuan. Implementasi ini belum menyediakan isolasi koneksi per pengguna untuk layanan multi-user.
 
 Key AI mengaktifkan fitur AI bila endpoint/model cocok dan kuotanya tersedia. Pencarian **Web** tetap memerlukan `TAVILY_API_KEY`; pencarian **Academic** memakai OpenAlex. Deploy dan konfigurasi AI tidak memindahkan data belajar lama dari browser atau domain lain.
 

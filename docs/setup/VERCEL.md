@@ -62,4 +62,4 @@ Environment opsional `STUDYOS_VERIFY_DEPLOYMENT` dapat menunjuk URL HTTPS produc
 - Daftar koneksi harus dapat dibuka, disimpan, dan dibaca kembali setelah request atau instance berikutnya. Key dan nilai custom headers tidak dikirim kembali ke browser.
 - Tes provider nyata melalui **Test connection** dan permintaan AI setelah mengaktifkan koneksi; build dan tes dengan mock tidak membuktikan akun provider memiliki kuota atau model yang diperlukan.
 
-Konfigurasi function membatasi durasi ke 90 detik. Batas timeout koneksi yang lebih besar tetap tunduk pada batas function. Upload frontend pada build Vercel dibatasi 3 MB. Periksa log runtime Vercel jika API mengembalikan error; jangan menyalin secret ke log diagnosis.
+Konfigurasi function membatasi durasi ke 300 detik. Batas timeout koneksi yang lebih besar tetap tunduk pada batas function. Upload frontend pada build Vercel dibatasi 3 MB. Periksa log runtime Vercel jika API mengembalikan error; jangan menyalin secret ke log diagnosis.

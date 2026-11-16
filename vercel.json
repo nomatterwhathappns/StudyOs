@@ -3,7 +3,7 @@
   "buildCommand": "pnpm build:vercel",
   "outputDirectory": "public",
   "functions": {
-    "api/server.mjs": { "maxDuration": 90 }
+    "api/server.mjs": { "maxDuration": 300 }
   },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/server" },

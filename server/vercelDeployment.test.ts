@@ -46,7 +46,7 @@ describe("Vercel deployment adapter", () => {
       'export { default } from "../dist/serverless.js"'
     );
     expect(vercelConfig.functions?.["api/server.mjs"]?.runtime).toBeUndefined();
-    expect(vercelConfig.functions?.["api/server.mjs"]?.maxDuration).toBe(90);
+    expect(vercelConfig.functions?.["api/server.mjs"]?.maxDuration).toBe(300);
     expect(vercelConfig.rewrites).toEqual(
       expect.arrayContaining([
         { source: "/api/:path*", destination: "/api/server" },
