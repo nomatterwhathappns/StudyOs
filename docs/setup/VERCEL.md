@@ -52,7 +52,7 @@ Sesi, materi, catatan, chat, kuis, dan riwayat belajar tetap disimpan di **Index
 
 ## Pemeriksaan deployment
 
-Build menjalankan pengecekan TypeScript, lalu mengemas `server/vercel.ts` ke `dist/serverless.js`. Entrypoint `api/server.mjs` memuat hasil kompilasi tersebut. Pada production, `pnpm verify:vercel` memeriksa baca/tulis Blob privat dan penolakan ETag yang sudah kedaluwarsa memakai objek uji terpisah yang langsung dihapus; koneksi pemilik tidak diubah.
+Build menjalankan pengecekan TypeScript, lalu mengemas `server/vercel.ts` ke `dist/serverless.js`. Entrypoint `api/server.mjs` memuat hasil kompilasi tersebut. Pada production, `pnpm verify:vercel` memeriksa baca/tulis Blob privat dan penolakan ETag yang sudah kedaluwarsa memakai objek uji terpisah yang langsung dihapus; koneksi pemilik tidak diubah. Build juga menjalankan hasil kompilasi pada HTTP loopback privat untuk memeriksa izin hostname production dan pembacaan pengaturan AI. Alat preview/debug Manus hanya dimuat saat development.
 
 Environment opsional `STUDYOS_VERIFY_DEPLOYMENT` dapat menunjuk URL HTTPS production proyek yang sudah tersedia untuk pemeriksaan HTTP terautentikasi saat build. Pemeriksaan memakai identitas OIDC production proyek sendiri, tanpa membuat tautan share atau mengubah Deployment Protection. Jika aturan Trusted Sources belum mengizinkannya, jangan melonggarkan perlindungan; kosongkan variabel ini dan periksa lewat sesi login pemilik.
 

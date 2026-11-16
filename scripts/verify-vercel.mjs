@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { BlobPreconditionFailedError, del, get, put } from "@vercel/blob";
 
 if (process.env.VERCEL !== "1" || process.env.VERCEL_ENV !== "production") {
@@ -79,6 +80,43 @@ try {
   );
 } finally {
   await del(pathname, { abortSignal: AbortSignal.timeout(15_000) });
+}
+
+// Exercise the exact compiled function with production host validation and
+// storage credentials, inside this trusted build runner on loopback only.
+const { default: handler } = await import("../api/server.mjs");
+const localServer = createServer((req, res) => void handler(req, res));
+await new Promise(resolve => localServer.listen(0, "127.0.0.1", resolve));
+try {
+  const host =
+    process.env.STUDYOS_PUBLIC_HOSTS?.split(",")[0]?.trim() ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  assert(host, "Configure the protected production hostname before deploying.");
+  const address = localServer.address();
+  const response = await fetch(
+    `http://127.0.0.1:${address.port}/api/trpc/aiConnections.list`,
+    {
+      headers: {
+        host,
+        origin: `https://${host}`,
+        "sec-fetch-site": "same-origin",
+      },
+      signal: AbortSignal.timeout(35_000),
+    }
+  );
+  assert.equal(
+    response.status,
+    200,
+    "Compiled function cannot read private AI settings with the production host configuration."
+  );
+  const result = await response.json();
+  assert(Array.isArray(result.result?.data?.json?.connections));
+  console.log(
+    "[StudyOS verification] Compiled function HTTP, production host access, and private AI settings passed."
+  );
+} finally {
+  localServer.closeAllConnections();
+  await new Promise(resolve => localServer.close(resolve));
 }
 
 // An optional existing deployment can be checked with the project's own
