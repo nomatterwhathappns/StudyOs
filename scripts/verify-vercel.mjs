@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { BlobPreconditionFailedError, del, get, put } from "@vercel/blob";
 
 if (process.env.VERCEL !== "1" || process.env.VERCEL_ENV !== "production") {
@@ -93,23 +93,42 @@ try {
     process.env.VERCEL_PROJECT_PRODUCTION_URL;
   assert(host, "Configure the protected production hostname before deploying.");
   const address = localServer.address();
-  const response = await fetch(
-    `http://127.0.0.1:${address.port}/api/trpc/aiConnections.list`,
-    {
-      headers: {
-        host,
-        origin: `https://${host}`,
-        "sec-fetch-site": "same-origin",
+  // Node fetch intentionally discards a custom Host header. Use the HTTP
+  // client so this private probe reproduces the production ingress hostname.
+  const response = await new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        hostname: "127.0.0.1",
+        port: address.port,
+        path: "/api/trpc/aiConnections.list",
+        headers: {
+          host,
+          origin: `https://${host}`,
+          "sec-fetch-site": "same-origin",
+        },
+        signal: AbortSignal.timeout(35_000),
       },
-      signal: AbortSignal.timeout(35_000),
-    }
-  );
+      response => {
+        const chunks = [];
+        response.on("data", chunk => chunks.push(chunk));
+        response.on("error", reject);
+        response.on("end", () =>
+          resolve({
+            status: response.statusCode,
+            body: Buffer.concat(chunks).toString("utf8"),
+          })
+        );
+      }
+    );
+    request.on("error", reject);
+    request.end();
+  });
   assert.equal(
     response.status,
     200,
     "Compiled function cannot read private AI settings with the production host configuration."
   );
-  const result = await response.json();
+  const result = JSON.parse(response.body);
   assert(Array.isArray(result.result?.data?.json?.connections));
   console.log(
     "[StudyOS verification] Compiled function HTTP, production host access, and private AI settings passed."
