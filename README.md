@@ -87,16 +87,16 @@ Variabel `VITE_*` dapat masuk bundle browser, sehingga tidak boleh berisi key at
 
 ## Perintah proyek
 
-| Perintah            | Fungsi                                                                                                             |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `pnpm dev`          | Server development Express dengan Vite.                                                                            |
-| `pnpm check`        | Pengecekan TypeScript tanpa menghasilkan JavaScript.                                                               |
-| `pnpm test`         | Menjalankan test suite.                                                                                            |
-| `pnpm build`        | Build frontend ke `dist/public` dan backend ke `dist/index.js`.                                                    |
-| `pnpm start`        | Menjalankan hasil build production.                                                                                |
-| `pnpm build:vercel` | Build frontend untuk Vercel dan menyalin aset ke root `public/`; backend dikemas dari `api/server.ts` oleh Vercel. |
-| `pnpm db:push`      | Generate dan menjalankan migrasi pada database yang ditunjuk `DATABASE_URL`.                                       |
-| `pnpm format`       | Memformat file proyek dengan Prettier.                                                                             |
+| Perintah            | Fungsi                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`          | Server development Express dengan Vite.                                                                             |
+| `pnpm check`        | Pengecekan TypeScript tanpa menghasilkan JavaScript.                                                                |
+| `pnpm test`         | Menjalankan test suite.                                                                                             |
+| `pnpm build`        | Build frontend ke `dist/public` dan backend ke `dist/index.js`.                                                     |
+| `pnpm start`        | Menjalankan hasil build production.                                                                                 |
+| `pnpm build:vercel` | Build frontend untuk Vercel dan menyalin aset ke root `public/`; backend dikemas dari `api/server.mjs` oleh Vercel. |
+| `pnpm db:push`      | Generate dan menjalankan migrasi pada database yang ditunjuk `DATABASE_URL`.                                        |
+| `pnpm format`       | Memformat file proyek dengan Prettier.                                                                              |
 
 Test adapter yang memakai mock tidak membuktikan semua endpoint/provider nyata kompatibel. Pemeriksaan melalui **Test connection** menghubungi API yang dikonfigurasi dan dapat memakai kuota; tes tersebut tidak wajib untuk menyimpan koneksi.
 
@@ -104,7 +104,7 @@ Test adapter yang memakai mock tidak membuktikan semua endpoint/provider nyata k
 
 Gunakan satu proses server Node dengan disk privat yang dapat ditulis dan bertahan setelah restart. Jalankan `pnpm build` lalu `pnpm start`; bila memakai container atau hosting, arahkan `STUDYOS_DATA_DIR` ke volume persisten milik proses server. Bawa `master.key` dan `connections.json` bersama saat migrasi.
 
-Untuk Vercel, [api/server.ts](api/server.ts) menjalankan backend, sedangkan [vercel.json](vercel.json) mengarahkan API dan halaman SPA. Konfigurasi AI disimpan sebagai satu dokumen terenkripsi pada Blob privat, bukan filesystem function. Pembaruan memakai ETag untuk mencegah perubahan bersamaan antar-instance menimpa satu sama lain. Kunci enkripsi berasal dari environment server yang stabil; konfigurasi cloud yang belum lengkap menghasilkan error, tanpa berpindah diam-diam ke disk sementara.
+Untuk Vercel, [api/server.mjs](api/server.mjs) menjalankan backend, sedangkan [vercel.json](vercel.json) mengarahkan API dan halaman SPA. Konfigurasi AI disimpan sebagai satu dokumen terenkripsi pada Blob privat, bukan filesystem function. Pembaruan memakai ETag untuk mencegah perubahan bersamaan antar-instance menimpa satu sama lain. Kunci enkripsi berasal dari environment server yang stabil; konfigurasi cloud yang belum lengkap menghasilkan error, tanpa berpindah diam-diam ke disk sementara.
 
 Siapkan proyek, perlindungan seluruh deployment, Blob privat, dan environment infrastruktur sesuai [panduan Vercel](docs/setup/VERCEL.md). Setelah deployment siap, buka **Profile → AI Connections**, isi URL, protokol, key, dan model provider, lalu simpan serta aktifkan koneksi. Endpoint harus dapat dijangkau dari Vercel: `localhost` atau 9router pada laptop tidak dapat diakses langsung dari deployment.
 

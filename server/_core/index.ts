@@ -45,7 +45,7 @@ async function startServer() {
   });
 }
 
-// This entrypoint owns the local listener. api/server.ts imports only app.ts.
+// This entrypoint owns the local listener. server/vercel.ts imports only app.ts.
 startServer().catch(error => {
   console.error(error);
   process.exitCode = 1;

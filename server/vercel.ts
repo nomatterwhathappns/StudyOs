@@ -1,4 +1,4 @@
-import { createApp } from "../server/_core/app";
+import { createApp } from "./_core/app";
 
 const appPromise = createApp();
 

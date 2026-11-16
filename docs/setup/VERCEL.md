@@ -52,6 +52,10 @@ Sesi, materi, catatan, chat, kuis, dan riwayat belajar tetap disimpan di **Index
 
 ## Pemeriksaan deployment
 
+Build menjalankan pengecekan TypeScript, lalu mengemas `server/vercel.ts` ke `dist/serverless.js`. Entrypoint `api/server.mjs` memuat hasil kompilasi tersebut. Pada production, `pnpm verify:vercel` memeriksa baca/tulis Blob privat dan penolakan ETag yang sudah kedaluwarsa memakai objek uji terpisah yang langsung dihapus; koneksi pemilik tidak diubah.
+
+Environment opsional `STUDYOS_VERIFY_DEPLOYMENT` dapat menunjuk URL HTTPS production proyek yang sudah tersedia untuk pemeriksaan HTTP terautentikasi saat build. Pemeriksaan memakai identitas OIDC production proyek sendiri, tanpa membuat tautan share atau mengubah Deployment Protection. Jika aturan Trusted Sources belum mengizinkannya, jangan melonggarkan perlindungan; kosongkan variabel ini dan periksa lewat sesi login pemilik.
+
 - Status deployment harus **Ready**; commit yang berhasil disimpan di GitHub belum membuktikan deploy berhasil.
 - Akses tanpa login ke halaman maupun `/api/` harus ditahan oleh perlindungan Vercel.
 - Setelah login, halaman utama, `/sessions`, dan `/studych` harus dapat dibuka langsung serta setelah refresh.

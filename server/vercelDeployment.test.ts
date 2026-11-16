@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import handler from "../api/server";
+import handler from "./vercel";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 
@@ -24,7 +24,7 @@ describe("Vercel deployment adapter", () => {
     };
 
     for (const filename of Object.keys(vercelConfig.functions ?? {})) {
-      expect(filename).toMatch(/^api\/.+\.ts$/);
+      expect(filename).toMatch(/^api\/.+\.mjs$/);
       expect(existsSync(resolve(projectRoot, filename))).toBe(true);
     }
     expect(packageJson.scripts?.["build:vercel"]).toContain(
@@ -35,8 +35,18 @@ describe("Vercel deployment adapter", () => {
     );
     expect(vercelConfig.buildCommand).toBe("pnpm build:vercel");
     expect(vercelConfig.outputDirectory).toBe("public");
-    expect(vercelConfig.functions?.["api/server.ts"]?.runtime).toBeUndefined();
-    expect(vercelConfig.functions?.["api/server.ts"]?.maxDuration).toBe(90);
+    expect(packageJson.scripts?.["build:vercel"]).toMatch(/^pnpm check &&/);
+    expect(packageJson.scripts?.["build:vercel"]).toContain(
+      "esbuild server/vercel.ts"
+    );
+    expect(packageJson.scripts?.["build:vercel"]).toContain(
+      "--outfile=dist/serverless.js"
+    );
+    expect(readProjectFile("api/server.mjs")).toContain(
+      'export { default } from "../dist/serverless.js"'
+    );
+    expect(vercelConfig.functions?.["api/server.mjs"]?.runtime).toBeUndefined();
+    expect(vercelConfig.functions?.["api/server.mjs"]?.maxDuration).toBe(90);
     expect(vercelConfig.rewrites).toEqual(
       expect.arrayContaining([
         { source: "/api/:path*", destination: "/api/server" },
@@ -49,7 +59,8 @@ describe("Vercel deployment adapter", () => {
 
   it("does not put the beta token or upstream API key in deployment config", () => {
     const trackedDeploymentFiles = [
-      "api/server.ts",
+      "api/server.mjs",
+      "server/vercel.ts",
       "vercel.json",
       "package.json",
       "server/_core/app.ts",
