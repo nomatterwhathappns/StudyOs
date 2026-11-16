@@ -19,12 +19,12 @@ Setelah disimpan, koneksi dapat diedit, dites, diaktifkan, atau dihapus. Menghap
 
 ## Memilih format API
 
-| Pilihan UI | Base URL yang umum | Autentikasi yang umum |
-| --- | --- | --- |
-| OpenAI-compatible Chat Completions | `https://api.openai.com/v1` atau base URL gateway yang kompatibel | Bearer token |
-| OpenAI Responses | `https://api.openai.com/v1` atau base URL Responses yang kompatibel | Bearer token |
-| Anthropic Messages | `https://api.anthropic.com/v1` | Custom authentication header: `x-api-key` |
-| Google Generative Language | `https://generativelanguage.googleapis.com/v1beta` | Custom authentication header: `x-goog-api-key` |
+| Pilihan UI                         | Base URL yang umum                                                  | Autentikasi yang umum                          |
+| ---------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------- |
+| OpenAI-compatible Chat Completions | `https://api.openai.com/v1` atau base URL gateway yang kompatibel   | Bearer token                                   |
+| OpenAI Responses                   | `https://api.openai.com/v1` atau base URL Responses yang kompatibel | Bearer token                                   |
+| Anthropic Messages                 | `https://api.anthropic.com/v1`                                      | Custom authentication header: `x-api-key`      |
+| Google Generative Language         | `https://generativelanguage.googleapis.com/v1beta`                  | Custom authentication header: `x-goog-api-key` |
 
 URL di atas merupakan contoh format, bukan jaminan izin akun, ketersediaan model, atau koneksi yang sudah diuji langsung. Model tidak ditetapkan oleh contoh tersebut.
 
@@ -48,13 +48,13 @@ Form tidak mengisi ulang key atau nilai header tersimpan. Daftar koneksi hanya m
 
 ## Opsi lanjutan
 
-| Opsi | Fungsi |
-| --- | --- |
-| **Stream responses** | Meminta respons streaming bila API mendukungnya. Matikan untuk gateway yang hanya mengembalikan JSON utuh. |
-| **Timeout** | Batas waktu generasi AI sesuai koneksi. Test/discovery memakai batas lebih singkat; batas server/hosting juga tetap berlaku. |
+| Opsi                  | Fungsi                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Stream responses**  | Meminta respons streaming bila API mendukungnya. Matikan untuk gateway yang hanya mengembalikan JSON utuh.                      |
+| **Timeout**           | Batas waktu generasi AI sesuai koneksi. Test/discovery memakai batas lebih singkat; batas server/hosting juga tetap berlaku.    |
 | **Max output tokens** | Batas atas keluaran koneksi. Fitur belajar juga memiliki anggaran token, sehingga request dapat memakai batas yang lebih kecil. |
-| **Token parameter** | Untuk Chat Completions: `auto`, `max_tokens`, `max_completion_tokens`, atau tanpa parameter. Gunakan sesuai API dan model. |
-| **JSON output** | Mode prompt meminta keluaran JSON lewat instruksi. Mode native menambahkan opsi JSON protokol yang didukung endpoint. |
+| **Token parameter**   | Untuk Chat Completions: `auto`, `max_tokens`, `max_completion_tokens`, atau tanpa parameter. Gunakan sesuai API dan model.      |
+| **JSON output**       | Mode prompt meminta keluaran JSON lewat instruksi. Mode native menambahkan opsi JSON protokol yang didukung endpoint.           |
 
 Native JSON tersedia melalui opsi OpenAI Chat Completions, OpenAI Responses, dan Google yang diimplementasikan adapter. Jalur Anthropic menggunakan instruksi JSON pada prompt. Dukungan JSON tetap bergantung pada endpoint/model; mode native bukan jaminan semua model menerima format tersebut.
 
@@ -71,15 +71,23 @@ Jalankan 9router secara terpisah, lalu tambahkan koneksi:
 
 Gunakan **Save connection → Use connection**. StudyOS tidak menyalakan 9router, membundel model, atau memerlukan mode provider khusus untuk gateway ini. HTTP loopback hanya dapat diakses oleh backend pada mesin yang sama; saat StudyOS dipindah ke server lain, `127.0.0.1` menunjuk server tersebut.
 
+Jika StudyOS dijalankan di Vercel, 9router pada laptop tidak dapat dijangkau melalui `localhost`, `127.0.0.1`, atau IP LAN laptop. Gunakan endpoint HTTPS yang dapat dijangkau dari internet dan dilindungi autentikasi, atau hubungkan langsung ke API cloud provider. Memasukkan URL lokal laptop ke Profile tidak membuat Vercel menghubungi laptop tersebut.
+
 ## Lokasi data dan akses
 
 Default direktori data adalah `.studyos/` pada working directory server. `STUDYOS_DATA_DIR` dapat menunjuk direktori privat persisten lain. `connections.json` berisi konfigurasi terenkripsi dan `master.key` berisi kunci lokalnya. Penyimpanan ini terpisah dari `JWT_SECRET` serta MySQL.
 
 Untuk backup atau migrasi, hentikan server dan salin kedua file sebagai satu pasangan ke lokasi privat milik proses server. Memiliki kedua file memungkinkan pemilik server membaca konfigurasi; jangan membagikan atau commit direktori data. Jika kunci hilang atau file rusak, aplikasi tidak dapat membaca koneksi lama dan tidak meresetnya secara diam-diam.
 
-Akses koneksi dibatasi ke request localhost pada server yang sama atau administrator yang sudah login. Membuka aplikasi lewat alamat LAN, domain, atau reverse proxy tidak otomatis memberikan akses sebagai localhost. Penyimpanan merupakan konfigurasi milik satu server; tidak menyediakan koneksi terisolasi per akun atau sinkronisasi antar-instance.
+Akses koneksi pada server lokal dibatasi ke request localhost pada server yang sama atau administrator yang sudah login. Membuka aplikasi lewat alamat LAN, domain, atau reverse proxy tidak otomatis memberikan akses sebagai localhost.
 
-Gunakan satu proses Node dan disk persisten. Filesystem function serverless yang sementara/read-only tidak cocok untuk menyimpan konfigurasi ini secara permanen. Lihat [README](../../README.md#deployment-dan-persistensi) untuk batas deployment.
+Untuk mode disk, gunakan satu proses Node dan disk persisten. Filesystem function Vercel tidak digunakan untuk menyimpan konfigurasi. Pada Vercel, pilih backend **Blob privat** melalui `STUDYOS_AI_STORAGE=vercel-blob`, sediakan `STUDYOS_AI_MASTER_KEY` yang stabil, dan hubungkan kredensial Blob pada server. Dokumen `studyos/ai-connections-v1.json` tetap terenkripsi; pembaruan bersamaan memakai ETag agar perubahan tidak saling menimpa. Kunci yang hilang, berubah, atau tidak cocok tidak menyebabkan konfigurasi lama direset.
+
+Mode Vercel memerlukan **Vercel Authentication untuk seluruh deployment**, serta `STUDYOS_CLOUD_ACCESS=vercel-protected`. Masuklah dengan akun Vercel yang memiliki akses proyek sebelum membuka Profile. Semua pengguna yang diberi akses deployment dapat memakai dan mengubah koneksi bersama itu. Aplikasi tidak menyediakan penyimpanan koneksi terisolasi per akun; jangan memberikan akses deployment kepada orang yang tidak boleh memakai key AI tersebut.
+
+Konfigurasi cloud yang tidak lengkap menghasilkan error dan tidak dialihkan ke disk sementara. Environment production dan preview perlu dipisahkan: secara default, sediakan kredensial koneksi hanya untuk production. Jika preview memerlukan AI, gunakan Blob store dan master key terpisah dari production. Lihat [panduan Vercel](VERCEL.md) untuk setup dan backup.
+
+Sesi belajar, materi, chat, catatan, kuis, dan riwayat belajar tetap berada di IndexedDB pada browser serta domain masing-masing. Penyimpanan koneksi di cloud tidak menyinkronkan data belajar tersebut.
 
 ## Migrasi dari konfigurasi AI lama
 
@@ -90,6 +98,6 @@ Variabel lama seperti `STUDYOS_LOCAL_AI_ROUTER_*`, `STUDYOS_AI_ROUTER_*`, `GOOGL
 3. Opsional: tes koneksi, kemudian simpan dan aktifkan.
 4. Setelah memastikan konfigurasi baru digunakan, hapus atau arsipkan konfigurasi AI lama secara privat.
 
-`STUDYOS_LOCAL_MODE` sekarang hanya menentukan jalur aplikasi lokal dibandingkan OAuth/storage cloud. Flag tersebut tidak memilih 9router atau provider AI lain. Mengganti konfigurasi koneksi tidak memigrasikan atau menghapus sesi belajar, materi, dan catatan di IndexedDB browser.
+`STUDYOS_LOCAL_MODE` sekarang hanya menentukan jalur aplikasi lokal dibandingkan integrasi OAuth/storage cloud lama. Deployment Vercel dengan Blob memakai `true` dan konfigurasi infrastrukturnya sendiri. Flag tersebut tidak memilih 9router atau provider AI lain. Mengganti konfigurasi koneksi tidak memigrasikan atau menghapus sesi belajar, materi, dan catatan di IndexedDB browser.
 
-Lihat [README](../../README.md) untuk setup aplikasi dan environment non-AI.
+Key provider yang benar diperlukan oleh fitur AI, tetapi layanan lain tetap memiliki konfigurasi sendiri. **Source → Search → Web** memerlukan `TAVILY_API_KEY`; pencarian Academic memakai OpenAlex. Lihat [README](../../README.md) untuk setup aplikasi dan environment lainnya.

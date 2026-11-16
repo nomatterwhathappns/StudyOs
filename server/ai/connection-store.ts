@@ -16,6 +16,12 @@ import {
   type PublicAiConnection,
   type ResolvedAiConnection,
 } from "@shared/ai-connections";
+import {
+  mutateBlobState,
+  readBlobState,
+  storageMode,
+  type StoreCodec,
+} from "./blob-store";
 
 const MAX_CONNECTIONS = 20;
 const MAX_STORE_BYTES = 4 * 1024 * 1024;
@@ -264,6 +270,48 @@ function validateState(value: unknown): StoredState {
   return { version: 1, connections, activeId: state.data.activeId };
 }
 
+function decodeState(serialized: string, key: Buffer): StoredState {
+  try {
+    const envelope = envelopeSchema.parse(JSON.parse(serialized));
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      key,
+      decodeBase64(envelope.iv, 12)
+    );
+    decipher.setAAD(CONTEXT);
+    decipher.setAuthTag(decodeBase64(envelope.tag, 16));
+    const plaintext = Buffer.concat([
+      decipher.update(decodeBase64(envelope.ciphertext)),
+      decipher.final(),
+    ]);
+    return validateState(JSON.parse(plaintext.toString("utf8")));
+  } catch {
+    corruptStore();
+  }
+}
+
+function encodeState(state: StoredState, key: Buffer): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(CONTEXT);
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(state), "utf8"),
+    cipher.final(),
+  ]);
+  return JSON.stringify({
+    version: 1,
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+  });
+}
+
+const codec: StoreCodec<StoredState> = {
+  empty: () => ({ version: 1, connections: [], activeId: null }),
+  decode: decodeState,
+  encode: encodeState,
+};
+
 async function readState(directory: string): Promise<StoredState> {
   if (!(await privateDirectory(directory, false)))
     return { version: 1, connections: [], activeId: null };
@@ -282,23 +330,7 @@ async function readState(directory: string): Promise<StoredState> {
     storageError("read");
   }
   const key = await readKey(directory);
-  try {
-    const envelope = envelopeSchema.parse(JSON.parse(serialized));
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      key!,
-      decodeBase64(envelope.iv, 12)
-    );
-    decipher.setAAD(CONTEXT);
-    decipher.setAuthTag(decodeBase64(envelope.tag, 16));
-    const plaintext = Buffer.concat([
-      decipher.update(decodeBase64(envelope.ciphertext)),
-      decipher.final(),
-    ]);
-    return validateState(JSON.parse(plaintext.toString("utf8")));
-  } catch {
-    corruptStore();
-  }
+  return decodeState(serialized, key!);
 }
 
 async function writeState(directory: string, state: StoredState) {
@@ -338,19 +370,7 @@ async function writeState(directory: string, state: StoredState) {
       key = await readKey(directory);
     }
     await fs.chmod(path.join(directory, KEY_FILE), 0o600);
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", key!, iv);
-    cipher.setAAD(CONTEXT);
-    const ciphertext = Buffer.concat([
-      cipher.update(JSON.stringify(state), "utf8"),
-      cipher.final(),
-    ]);
-    const envelope = JSON.stringify({
-      version: 1,
-      iv: iv.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"),
-      ciphertext: ciphertext.toString("base64"),
-    });
+    const envelope = encodeState(state, key!);
     const handle = await fs.open(temporary, "wx", 0o600);
     try {
       await handle.writeFile(envelope, "utf8");
@@ -365,6 +385,24 @@ async function writeState(directory: string, state: StoredState) {
   } finally {
     await fs.unlink(temporary).catch(() => undefined);
   }
+}
+
+function readStore(): Promise<StoredState> {
+  if (storageMode() === "vercel-blob") return readBlobState(codec);
+  return queued(readState);
+}
+
+async function mutateStore<Result>(
+  operation: (state: StoredState) => { state: StoredState; result: Result }
+): Promise<Result> {
+  if (storageMode() === "vercel-blob") return mutateBlobState(codec, operation);
+  return queued(directory =>
+    withWriteLock(directory, async () => {
+      const next = operation(await readState(directory));
+      await writeState(directory, next.state);
+      return next.result;
+    })
+  );
 }
 
 function publicConnection(
@@ -433,116 +471,103 @@ function mergeConnection(
   return merged;
 }
 
-export function listConnections(): Promise<AiConnectionsState> {
-  return queued(async directory => {
-    const state = await readState(directory);
-    return {
-      connections: state.connections.map(publicConnection),
-      activeId: state.activeId,
-    };
-  });
+export async function listConnections(): Promise<AiConnectionsState> {
+  const state = await readStore();
+  return {
+    connections: state.connections.map(publicConnection),
+    activeId: state.activeId,
+  };
 }
 
 export function saveConnection(
   draft: AiConnectionDraft
 ): Promise<PublicAiConnection> {
   const input = parseInput(draft);
-  return queued(directory =>
-    withWriteLock(directory, async () => {
-      const state = await readState(directory);
-      const existing = input.id
-        ? requireConnection(state, input.id)
-        : undefined;
-      if (!existing && state.connections.length >= MAX_CONNECTIONS)
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "You can save at most 20 AI connections. Remove one before adding another.",
-        });
-      const connection = mergeConnection(input, existing);
-      const next = existing
-        ? state.connections.map(item =>
-            item.id === existing.id ? connection : item
-          )
-        : [...state.connections, connection];
-      await writeState(directory, { ...state, connections: next });
-      return publicConnection(connection);
-    })
-  );
+  // A create keeps one identity if a Blob creation races or its response is
+  // interrupted after the service has committed the write.
+  const id = input.id ?? randomUUID();
+  return mutateStore(state => {
+    const existing = input.id
+      ? requireConnection(state, input.id)
+      : state.connections.find(connection => connection.id === id);
+    if (!existing && state.connections.length >= MAX_CONNECTIONS)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "You can save at most 20 AI connections. Remove one before adding another.",
+      });
+    const connection = mergeConnection({ ...input, id }, existing);
+    const connections = existing
+      ? state.connections.map(item =>
+          item.id === existing.id ? connection : item
+        )
+      : [...state.connections, connection];
+    return {
+      state: { ...state, connections },
+      result: publicConnection(connection),
+    };
+  });
 }
 
 export function deleteConnection(
   id: string
 ): Promise<{ activeId: string | null }> {
-  return queued(directory =>
-    withWriteLock(directory, async () => {
-      const state = await readState(directory);
-      requireConnection(state, id);
-      const activeId = state.activeId === id ? null : state.activeId;
-      await writeState(directory, {
+  return mutateStore(state => {
+    requireConnection(state, id);
+    const activeId = state.activeId === id ? null : state.activeId;
+    return {
+      state: {
         ...state,
         activeId,
         connections: state.connections.filter(item => item.id !== id),
-      });
-      return { activeId };
-    })
-  );
-}
-
-export function activateConnection(id: string): Promise<{ activeId: string }> {
-  return queued(directory =>
-    withWriteLock(directory, async () => {
-      const state = await readState(directory);
-      requireConnection(state, id);
-      await writeState(directory, { ...state, activeId: id });
-      return { activeId: id };
-    })
-  );
-}
-
-export function getConnection(id: string): Promise<ResolvedAiConnection> {
-  return queued(async directory =>
-    requireConnection(await readState(directory), id)
-  );
-}
-
-export function getActiveConnection(): Promise<ResolvedAiConnection> {
-  return queued(async directory => {
-    const state = await readState(directory);
-    if (!state.activeId)
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "Choose an AI connection in AI settings before sending a request.",
-      });
-    return requireConnection(state, state.activeId);
+      },
+      result: { activeId },
+    };
   });
 }
 
-export function resolveDraftConnection(input: {
+export function activateConnection(id: string): Promise<{ activeId: string }> {
+  return mutateStore(state => {
+    requireConnection(state, id);
+    return { state: { ...state, activeId: id }, result: { activeId: id } };
+  });
+}
+
+export async function getConnection(id: string): Promise<ResolvedAiConnection> {
+  return requireConnection(await readStore(), id);
+}
+
+export async function getActiveConnection(): Promise<ResolvedAiConnection> {
+  const state = await readStore();
+  if (!state.activeId)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Choose an AI connection in AI settings before sending a request.",
+    });
+  return requireConnection(state, state.activeId);
+}
+
+export async function resolveDraftConnection(input: {
   id?: string;
   draft?: AiConnectionDraft;
 }): Promise<ResolvedAiConnection> {
-  return queued(async directory => {
-    if (input.id && input.draft?.id && input.id !== input.draft.id)
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "The connection IDs do not match.",
-      });
-    const id = input.id ?? input.draft?.id;
-    const existing = id
-      ? requireConnection(await readState(directory), id)
-      : undefined;
-    if (input.draft)
-      return mergeConnection(
-        parseInput({ ...input.draft, ...(id ? { id } : {}) }),
-        existing
-      );
-    if (existing) return existing;
+  storageMode();
+  if (input.id && input.draft?.id && input.id !== input.draft.id)
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message:
-        "Choose a saved connection or provide connection settings first.",
+      message: "The connection IDs do not match.",
     });
+  const id = input.id ?? input.draft?.id;
+  const existing = id ? requireConnection(await readStore(), id) : undefined;
+  if (input.draft)
+    return mergeConnection(
+      parseInput({ ...input.draft, ...(id ? { id } : {}) }),
+      existing
+    );
+  if (existing) return existing;
+  throw new TRPCError({
+    code: "BAD_REQUEST",
+    message: "Choose a saved connection or provide connection settings first.",
   });
 }
