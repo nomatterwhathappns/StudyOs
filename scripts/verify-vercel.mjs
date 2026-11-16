@@ -191,6 +191,80 @@ if (process.env.STUDYOS_VERIFY_DEPLOYMENT) {
         !Object.hasOwn(connection, "extraHeaders")
     );
   }
+  // Create only our own temporary, inactive connection. Never edit or activate
+  // an owner's connection, and remove the probe even if a later check fails.
+  if (connections.result.data.json.connections.length < 19) {
+    const name = `Deployment check ${randomUUID()}`;
+    const secret = `verification-only-${randomBytes(16).toString("hex")}`;
+    const header = randomBytes(16).toString("hex");
+    const draft = {
+      name,
+      baseUrl: "https://example.com/v1",
+      model: "verification-only",
+      apiKey: secret,
+      extraHeaders: { "x-studyos-probe": header },
+    };
+    const mutation = async (route, data) =>
+      (
+        await request(`/api/trpc/aiConnections.${route}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ json: data }),
+        })
+      ).json();
+    let id;
+    try {
+      const saved = await mutation("save", draft);
+      id = saved.result?.data?.json?.id;
+      assert(id);
+      assert.equal(saved.result.data.json.keySuffix, secret.slice(-4));
+      const edited = await mutation("save", {
+        ...draft,
+        id,
+        apiKey: "",
+        extraHeaders: undefined,
+      });
+      assert.equal(edited.result?.data?.json?.keySuffix, secret.slice(-4));
+      const listed = await (
+        await request("/api/trpc/aiConnections.list")
+      ).json();
+      const record = listed.result?.data?.json?.connections.find(
+        connection => connection.id === id
+      );
+      assert(
+        record?.hasApiKey && record.headerNames.includes("x-studyos-probe")
+      );
+      assert(
+        !JSON.stringify(listed).includes(secret) &&
+          !JSON.stringify(listed).includes(header)
+      );
+      console.log(
+        "[StudyOS verification] Production connection save, persistence, blank-key preservation, and secret redaction passed."
+      );
+    } finally {
+      // A first save can commit before an interrupted response. Recover the
+      // unique probe identity before cleanup in that case.
+      if (!id) {
+        const listed = await (
+          await request("/api/trpc/aiConnections.list")
+        ).json();
+        id = listed.result?.data?.json?.connections.find(
+          connection => connection.name === name
+        )?.id;
+      }
+      if (id) {
+        await mutation("remove", { id });
+        const listed = await (
+          await request("/api/trpc/aiConnections.list")
+        ).json();
+        assert(
+          !listed.result?.data?.json?.connections.some(
+            connection => connection.id === id
+          )
+        );
+      }
+    }
+  }
   for (const path of ["/", "/sessions", "/studych"]) {
     const response = await request(path);
     assert(response.headers.get("content-type")?.includes("text/html"));

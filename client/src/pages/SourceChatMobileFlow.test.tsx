@@ -445,21 +445,31 @@ describe("mobile Source and AI flow", () => {
   });
 
   it("renders a Source-triggered translation after the shared workspace task finishes", async () => {
-    const translatedSession: StudySession = {
-      ...session,
-      chatHistory: [{ id: "shared-ai", role: "assistant", content: "Penyimpanan cloud menyimpan file lewat internet.", createdAt: 1 }],
-    };
-    translateChatMutateAsync.mockResolvedValueOnce({ translations: {
-      english: [{ id: "shared-ai", content: "Cloud storage stores files over the internet." }],
-      indonesian: [{ id: "shared-ai", content: "Penyimpanan cloud menyimpan file lewat internet." }],
-    } });
-    const ui = render(<WorkspacePanelsWithProvider session={translatedSession} />);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const translatedSession: StudySession = {
+        ...session,
+        chatHistory: [{ id: "shared-ai", role: "assistant", content: "Penyimpanan cloud menyimpan file lewat internet.", createdAt: 1 }],
+      };
+      translateChatMutateAsync.mockResolvedValueOnce({ translations: {
+        english: [{ id: "shared-ai", content: "Cloud storage stores files over the internet." }],
+        indonesian: [{ id: "shared-ai", content: "Penyimpanan cloud menyimpan file lewat internet." }],
+      } });
+      const ui = render(<WorkspacePanelsWithProvider session={translatedSession} />);
 
-    fireEvent.click(ui.getByRole("button", { name: "Translate to English" }));
+      await act(async () => {
+        fireEvent.click(ui.getByRole("button", { name: "Translate to English" }));
+      });
 
-    await waitFor(() => expect(translateChatMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ target: "english", messages: [{ id: "shared-ai", content: "Penyimpanan cloud menyimpan file lewat internet." }] })));
-    await waitFor(() => expect(ui.getByText("Cloud storage stores files over the internet.")).toBeTruthy());
-    await waitFor(() => expect(ui.getByRole("button", { name: "Translate to Indonesian" })).toBeTruthy());
+      expect(translateChatMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ target: "english", messages: [{ id: "shared-ai", content: "Penyimpanan cloud menyimpan file lewat internet." }] }));
+      expect(ui.getByText("Cloud storage stores files over the internet.")).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(260);
+      });
+      expect(ui.getByRole("button", { name: "Translate to Indonesian" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the active direction for a new AI answer until the user requests its translation", async () => {
