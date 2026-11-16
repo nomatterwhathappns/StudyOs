@@ -10,17 +10,17 @@ StudyOS menjalankan frontend statis dan backend Express/tRPC pada satu proyek Ve
 4. Buat **Blob store dengan akses private**, lalu hubungkan ke proyek. Pastikan aksesnya private saat membuat store.
 5. Tambahkan environment server pada tabel berikut ke target **Production**, lalu deploy ulang jika nilainya berubah.
 
-| Environment             | Nilai atau sumber                                                                                                          |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `STUDYOS_LOCAL_MODE`    | `true`; tetap memakai data belajar di browser dan tidak memerlukan integrasi OAuth/database lama.                          |
-| `STUDYOS_AI_STORAGE`    | `vercel-blob`                                                                                                              |
-| `STUDYOS_AI_MASTER_KEY` | Tepat 32 byte acak kriptografis yang dienkode base64. Simpan sebagai secret server.                                        |
-| `STUDYOS_CLOUD_ACCESS`  | `vercel-protected`                                                                                                         |
-| `BLOB_READ_WRITE_TOKEN` | Token server dari koneksi Blob store privat; alternatifnya gunakan `BLOB_STORE_ID` dengan `VERCEL_OIDC_TOKEN` dari Vercel. |
-| `STUDYOS_PUBLIC_HOSTS`  | Opsional: hostname tambahan yang persis diizinkan, dipisahkan koma. Jangan isi skema URL, path, atau wildcard.             |
-| `TAVILY_API_KEY`        | Opsional untuk **Source → Search → Web**. Tidak diperlukan untuk mengatur koneksi AI.                                      |
+| Environment             | Nilai atau sumber                                                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `STUDYOS_LOCAL_MODE`    | `true`; tetap memakai data belajar di browser dan tidak memerlukan integrasi OAuth/database lama.                            |
+| `STUDYOS_AI_STORAGE`    | `vercel-blob`                                                                                                                |
+| `STUDYOS_AI_MASTER_KEY` | Tepat 32 byte acak kriptografis yang dienkode base64. Simpan sebagai secret server.                                          |
+| `STUDYOS_CLOUD_ACCESS`  | `vercel-protected`                                                                                                           |
+| `BLOB_READ_WRITE_TOKEN` | Token server dari koneksi Blob store privat; alternatifnya gunakan `BLOB_STORE_ID` dengan `VERCEL_OIDC_TOKEN` dari Vercel.   |
+| `STUDYOS_PUBLIC_HOSTS`  | Isi hostname production dan alias resmi proyek yang persis diizinkan, dipisahkan koma. Tanpa skema URL, path, atau wildcard. |
+| `TAVILY_API_KEY`        | Opsional untuk **Source → Search → Web**. Tidak diperlukan untuk mengatur koneksi AI.                                        |
 
-Vercel menyediakan `VERCEL=1` dan hostname deployment melalui system environment. Backend memakai hostname deployment, branch, dan production yang dipercaya dari environment tersebut. Hostname tambahan pada `STUDYOS_PUBLIC_HOSTS` juga wajib dilindungi Vercel Authentication; izin hostname aplikasi bukan pengganti perlindungan deployment.
+Vercel menyediakan `VERCEL=1`; ketersediaan hostname pada system environment dapat bergantung pada pengaturan framework/proyek. Isi `STUDYOS_PUBLIC_HOSTS` dengan hostname production yang dilindungi agar akses tidak bergantung pada variabel hostname build. Backend memakai hostname deployment, branch, dan production yang dipercaya dari environment tersebut. Hostname tambahan pada `STUDYOS_PUBLIC_HOSTS` juga wajib dilindungi Vercel Authentication; izin hostname aplikasi bukan pengganti perlindungan deployment.
 
 Jangan memasukkan secret dalam variabel `VITE_*`, source code, log, screenshot, atau commit Git. Key provider berbeda dari `STUDYOS_AI_MASTER_KEY` dan kredensial Blob: provider key diisi melalui Profile, sedangkan dua secret infrastruktur tersebut tetap hanya berada pada server.
 
