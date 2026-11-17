@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AiConnections } from "@/components/studyos/AiConnections";
 import { ThemeSettings } from "@/components/studyos/ThemeSettings";
+import { OwnerAccountControls } from "@/contexts/OwnerAccessContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -69,6 +70,7 @@ export function ProfileView({ profile, sessions, timers, onProfileUpdate, onDele
   return (
     <section className="mx-auto max-w-7xl">
       <PageHeader title="Profile" action={<ProfileEditor profile={profile} onSave={onProfileUpdate} />} />
+      <OwnerAccountControls />
       <div className="study-profile-card mt-8">
         <ProfileAvatar profile={profile} size="lg" />
         <div className="min-w-0">

@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import type { StudyCitation } from "@/lib/study-types";
 import { useStudyStore } from "@/store/useStudyStore";
 import type { QuizGenerationSettings } from "@/components/studyos/QuizGeneratorDialog";
-import React, { createContext, useContext, useMemo, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 type SourceTaskKind = "explain" | "key-term" | "vocabulary" | "quiz" | "chat-translation";
 type SourceTaskStatus = "pending" | "review" | "error";
@@ -79,6 +79,12 @@ export function SourceAiActivityProvider({ children }: { children: React.ReactNo
   const [chatTranslationTargets, setChatTranslationTargets] = useState<Record<string, ChatTranslationLanguage>>({});
   const [chatTranslationJobs, setChatTranslationJobs] = useState<Record<string, ChatTranslationJob>>({});
 
+  useEffect(() => () => {
+    // The provider survives panel navigation, but ends with the owner session.
+    // Detached mutation callbacks must not write data or queue another batch.
+    runs.current = {};
+  }, []);
+
   const begin = (kind: SourceTaskKind, request: Pick<SourceRequest, "sessionId" | "sessionName"> & { selection?: string }) => {
     const id = taskId(kind);
     const label = kind === "key-term" ? "Save Terms" : kind === "vocabulary" ? "Save Vocab" : kind === "quiz" ? "Generate Quiz" : kind === "chat-translation" ? "Translate Chat" : "Explain";
@@ -127,6 +133,7 @@ export function SourceAiActivityProvider({ children }: { children: React.ReactNo
   };
 
   const runChatTranslationBatch = (id: string, run: number, request: ChatTranslationRequest, offset: number) => {
+    if (runs.current[id] !== run) return;
     const batch = request.messages.slice(offset, offset + 6);
     if (!batch.length) { setChatTranslationJobs((current) => { const next = { ...current }; delete next[request.sessionId]; return next; }); finish(id, run, () => null); return; }
     translateChat.mutate({ model: request.model, target: request.target, messages: batch }, {

@@ -3,13 +3,53 @@
   "buildCommand": "pnpm build:vercel",
   "outputDirectory": "public",
   "functions": {
-    "api/server.mjs": { "maxDuration": 300 }
+    "api/server.mjs": {
+      "maxDuration": 300
+    }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/server" },
-    { "source": "/manus-storage/:path*", "destination": "/api/server" },
-    { "source": "/studych", "destination": "/index.html" },
-    { "source": "/sessions", "destination": "/index.html" },
-    { "source": "/404", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api/server"
+    },
+    {
+      "source": "/manus-storage/:path*",
+      "destination": "/api/server"
+    },
+    {
+      "source": "/studych",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/sessions",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/404",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
   ]
 }

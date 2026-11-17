@@ -127,18 +127,35 @@
     }
   }
 
+  function decodePrivacyPath(value) {
+    // Decode ASCII escapes even when an unrelated malformed escape is present.
+    // Repeated encoding must not turn a private endpoint into a recorded request.
+    for (var i = 0; i < 3; i++) {
+      var decoded = value.replace(/%([0-9a-f]{2})/gi, function (_match, code) {
+        return String.fromCharCode(parseInt(code, 16));
+      });
+      if (decoded === value) break;
+      value = decoded;
+    }
+    return value;
+  }
+
   function shouldIgnoreRequest(value) {
     try {
-      var pathname = new URL(String(value), location.href).pathname;
-      try { pathname = decodeURIComponent(pathname); } catch (e) { /* keep the original path */ }
+      var pathname = decodePrivacyPath(new URL(String(value), location.href).pathname);
       if (pathname.indexOf("/__manus__/") === 0) return true;
+      // Session responses and every owner-auth request are private in full,
+      // including usernames and future endpoints added under this namespace.
+      if (/^\/api\/owner(?:\/|%|$)/i.test(pathname)) return true;
       // Exclude the entire batch: unrelated procedures can share a request body
       // with a write-only key or custom authentication header.
       return pathname.indexOf("/api/trpc/") === 0 &&
         /(?:^|[,/])aiConnections(?:[.%]|$)/i.test(pathname.slice("/api/trpc/".length));
     } catch (e) {
       // A malformed URL must not cause a credential-bearing mutation to be logged.
-      return /aiConnections(?:\.|%|$)/i.test(String(value));
+      var candidate = decodePrivacyPath(String(value));
+      return /\/api\/owner(?:\/|[?#%]|$)/i.test(candidate) ||
+        /aiConnections(?:\.|%|$)/i.test(candidate);
     }
   }
 

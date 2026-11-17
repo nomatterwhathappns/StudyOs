@@ -9,6 +9,7 @@ Aplikasi pendamping belajar berbasis AI dengan workspace **Source**, **Chat**, d
 - Kuis pilihan ganda, kartu istilah/vocabulary dengan jadwal review, serta catatan rich text.
 - Stopwatch/countdown, riwayat waktu belajar, dashboard, dan pengaturan tema.
 - **AI Connections** di Profile untuk mengatur URL API, autentikasi, model, dan koneksi aktif.
+- Login username/password untuk **satu akun pemilik**, tanpa database SQL tambahan pada deployment Vercel.
 
 Sesi, materi, chat, catatan, kuis, dan riwayat belajar tetap disimpan di **IndexedDB browser**. Data tersebut belum tersinkron antarperangkat; menghapus data situs dapat menghapusnya. Konfigurasi koneksi AI disimpan terpisah oleh backend: pada disk privat untuk server lokal, atau pada **Vercel Blob privat dan terenkripsi** untuk deployment Vercel.
 
@@ -30,6 +31,16 @@ Buka alamat yang dicetak terminal, biasanya `http://localhost:3000`. Jika port t
 
 Chat, Explain, terjemahan, kuis, dan pembuatan istilah memakai koneksi aktif tersebut. StudyOS tidak memilih provider bawaan atau berpindah ke provider lain secara otomatis ketika koneksi gagal. Lihat [panduan AI Connections](docs/setup/AI_CONNECTIONS.md) untuk autentikasi, opsi lanjutan, contoh gateway lokal, dan migrasi konfigurasi lama.
 
+## Login pemilik
+
+Deployment Vercel memakai login **akun pemilik StudyOS**, terpisah dari akun GitHub atau Vercel. Setup pertama memerlukan private setup key dari environment proyek; pemilik memilih username dan password langsung pada form web. Jangan kirim password atau setup key melalui chat atau GitHub.
+
+Setelah login, buka Profile untuk mengatur AI Connections. **Sign out** membatalkan request aktif, mengunci halaman, dan membersihkan state memori tanpa menghapus data belajar di IndexedDB. Sesi login berlaku hingga 24 jam dan dapat dicabut saat sign out.
+
+Username, hash password, sesi, dan batas percobaan login disimpan dalam satu record terenkripsi pada Blob privat yang sudah digunakan proyek. Tidak ada pendaftaran umum atau koneksi AI terpisah per pengguna. Lihat [panduan login pemilik](docs/setup/OWNER_LOGIN.md) untuk setup pertama, environment, dan batas pemulihan akun.
+
+Mode lokal tetap dapat dipakai tanpa login untuk kompatibilitas. Aktifkan owner auth secara eksplisit bila memerlukan gate username/password pada localhost.
+
 ## Format API yang didukung
 
 | API protocol                       | Operasi utama                                          |
@@ -43,47 +54,49 @@ Pilih format yang benar-benar didukung endpoint, bukan hanya berdasarkan merek p
 
 ## Penyimpanan dan akses koneksi AI
 
-Default penyimpanan server adalah direktori `.studyos/` pada working directory aplikasi:
+Default penyimpanan AI pada server lokal adalah direktori `.studyos/` di working directory aplikasi:
 
-- `connections.json`: konfigurasi koneksi terenkripsi, termasuk key dan custom headers.
-- `master.key`: kunci enkripsi lokal yang dibuat server.
+- `connections.json`: konfigurasi koneksi AI terenkripsi, termasuk key dan custom headers.
+- `master.key`: kunci enkripsi AI lokal yang dibuat server.
 
-Direktori tersebut diabaikan Git. Untuk memindahkan atau mencadangkan koneksi, hentikan server lalu salin **kedua file sebagai satu pasangan** ke lokasi privat. Kehilangan `master.key` membuat konfigurasi terenkripsi tidak dapat dibaca. Menghapus data browser tidak menghapus koneksi server, dan memindahkan file koneksi tidak memindahkan data belajar di IndexedDB.
+Jika owner auth lokal diaktifkan, record akun memakai `owner-auth.json` dan kunci lokal `owner-auth.key` yang terpisah. Direktori data diabaikan Git. Cadangkan setiap dokumen bersama kunci yang cocok di lokasi privat; jangan menghapus atau mengganti kunci untuk mencoba memulihkan login.
 
-Pada server lokal, manajemen serta penggunaan koneksi AI tersedia dari **localhost pada server yang sama**, atau untuk **administrator yang sudah login**. Membuka aplikasi melalui alamat jaringan/proxy tidak otomatis memberikan akses localhost.
+Pada Vercel, koneksi AI tetap berada pada Blob privat `studyos/ai-connections-v1.json`. Owner auth memakai **dokumen lain**, `studyos/owner-auth-v1.json`, dengan kunci turunan dari `STUDYOS_AI_MASTER_KEY` yang sudah ada. Menambahkan login tidak memindahkan atau mereset koneksi AI pemilik. Pertahankan Blob store dan master key yang sama saat redeploy.
 
-Pada Vercel, gunakan **Vercel Authentication untuk seluruh deployment**, penyimpanan Blob privat, dan mode akses khusus deployment terlindungi. Pengguna masuk dengan akun Vercel yang memiliki akses proyek, lalu mengatur koneksi melalui Profile. Semua orang yang diberi akses deployment dapat mengelola dan memakai koneksi AI bersama tersebut; koneksi belum diisolasi per akun. Lihat [panduan deployment Vercel](docs/setup/VERCEL.md).
+Saat owner auth aktif, seluruh API bisnis, streaming chat, upload, dan pengelolaan koneksi memerlukan sesi pemilik yang valid. Pada localhost tanpa owner auth, batas akses lokal/admin lama tetap berlaku. Membuka alamat jaringan atau menyetel hostname tidak memberikan sesi pemilik.
 
-## Konfigurasi environment opsional
+Data belajar di IndexedDB tetap terpisah dari konfigurasi AI dan akun login. Data browser lama tidak otomatis muncul pada perangkat atau domain lain. Lihat [AI Connections](docs/setup/AI_CONNECTIONS.md) dan [deployment Vercel](docs/setup/VERCEL.md).
 
-AI URL, key, dan model dikonfigurasi melalui Profile. Environment AI lama tidak diimpor atau diaktifkan otomatis.
+## Konfigurasi environment
 
-Untuk pengaturan non-AI, salin [.env.example](.env.example) menjadi `.env` jika diperlukan:
+AI URL, key, dan model dikonfigurasi melalui Profile. Environment AI provider lama tidak diimpor atau diaktifkan otomatis. File `.env` tidak wajib untuk mode aplikasi lokal tanpa owner auth.
+
+Salin [.env.example](.env.example) menjadi `.env` bila diperlukan; pada Vercel gunakan environment proyek untuk target Production.
 
 ```bash
 cp .env.example .env
 ```
 
-Di PowerShell, gunakan `Copy-Item .env.example .env`. Restart server setelah mengubah environment.
+Di PowerShell, gunakan `Copy-Item .env.example .env`. Restart atau redeploy setelah mengubah environment.
 
-| Variabel                                                           | Kegunaan                                                                                                                                                                            |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STUDYOS_LOCAL_MODE`                                               | Default lokal; pertahankan `true` untuk deployment Vercel tanpa layanan OAuth/storage lama. Nilai `false` mengaktifkan integrasi lama tersebut, bukan provider atau penyimpanan AI. |
-| `STUDYOS_DATA_DIR`                                                 | Direktori privat dan persisten untuk koneksi AI; default `.studyos/` pada working directory.                                                                                        |
-| `STUDYOS_AI_STORAGE`                                               | Pada Vercel, wajib `vercel-blob`; filesystem function tidak dipakai untuk menyimpan koneksi.                                                                                        |
-| `STUDYOS_AI_MASTER_KEY`                                            | Pada mode Blob, kunci enkripsi 32 byte dalam base64, tersimpan sebagai secret server dan dipertahankan antar-deployment.                                                            |
-| `BLOB_READ_WRITE_TOKEN` atau `BLOB_STORE_ID` + `VERCEL_OIDC_TOKEN` | Autentikasi backend ke Blob store privat. Jangan gunakan kredensial ini di browser.                                                                                                 |
-| `STUDYOS_CLOUD_ACCESS`                                             | Nilai `vercel-protected` mengaktifkan akses AI khusus Vercel yang seluruh deployment-nya dilindungi Vercel Authentication.                                                          |
-| `STUDYOS_PUBLIC_HOSTS`                                             | Hostname tambahan yang diizinkan pada mode Vercel terlindungi, dipisahkan koma. Setiap hostname harus turut dilindungi Vercel Authentication.                                       |
-| `TAVILY_API_KEY`                                                   | Pencarian Web. Pencarian Academic memakai OpenAlex.                                                                                                                                 |
-| `PORT`                                                             | Port server Node; default `3000`.                                                                                                                                                   |
-| `DATABASE_URL`                                                     | Koneksi MySQL untuk pengguna pada jalur login cloud. Tidak diperlukan oleh penyimpanan AI Connections.                                                                              |
-| `JWT_SECRET`                                                       | Secret sesi pada integrasi login cloud lama. Enkripsi AI Connections memakai `master.key` lokal atau `STUDYOS_AI_MASTER_KEY` pada Blob, secara terpisah.                            |
-| `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `OAUTH_SERVER_URL`         | Identitas aplikasi, portal login browser, dan layanan OAuth server.                                                                                                                 |
-| `OWNER_OPEN_ID`                                                    | OpenID pemilik yang diberi peran admin ketika pengguna disimpan.                                                                                                                    |
-| `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`                 | Konfigurasi storage cloud dan layanan pendukung lama yang masih digunakan; tidak memilih koneksi AI.                                                                                |
+| Variabel                                                                                                  | Kegunaan                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `STUDYOS_LOCAL_MODE`                                                                                      | Default lokal; tetap `true` pada Vercel tanpa integrasi OAuth/storage lama. Tidak memilih provider AI atau menonaktifkan owner auth. |
+| `STUDYOS_OWNER_AUTH`                                                                                      | `enabled` untuk login satu pemilik; wajib pada jalur Vercel. Default lokal tanpa flag ini tetap tanpa login.                         |
+| `STUDYOS_OWNER_SESSION_SECRET`                                                                            | Secret server acak minimal 32 karakter untuk menyegel cookie sesi. Berbeda dari password pengguna dan master key AI.                 |
+| `STUDYOS_OWNER_SETUP_ENABLED`                                                                             | `true` selama setup akun pertama; dapat dinonaktifkan setelah akun dibuat.                                                           |
+| `STUDYOS_OWNER_SETUP_KEY`                                                                                 | Secret setup acak berentropi tinggi, setidaknya 256 bit, yang dimasukkan pemilik pada form setup pertama.                            |
+| `STUDYOS_DATA_DIR`                                                                                        | Direktori privat persisten untuk file lokal AI dan owner auth; default `.studyos/`.                                                  |
+| `STUDYOS_AI_STORAGE`                                                                                      | Pada Vercel, `vercel-blob`; filesystem function tidak menyimpan koneksi permanen.                                                    |
+| `STUDYOS_AI_MASTER_KEY`                                                                                   | Kunci Blob 32 byte dalam base64. Pertahankan agar dokumen AI dan owner auth dapat dibaca setelah redeploy.                           |
+| `BLOB_READ_WRITE_TOKEN` atau `BLOB_STORE_ID` + `VERCEL_OIDC_TOKEN`                                        | Akses backend ke Blob store privat.                                                                                                  |
+| `STUDYOS_PUBLIC_HOSTS`                                                                                    | Hostname production/alias resmi yang persis diizinkan, dipisahkan koma; bukan pengganti login.                                       |
+| `TAVILY_API_KEY`                                                                                          | Pencarian Web. Pencarian Academic memakai OpenAlex.                                                                                  |
+| `PORT`                                                                                                    | Port server Node; default `3000`.                                                                                                    |
+| `DATABASE_URL`, `JWT_SECRET`, `VITE_APP_ID`, `VITE_OAUTH_PORTAL_URL`, `OAUTH_SERVER_URL`, `OWNER_OPEN_ID` | Hanya untuk integrasi akun/OAuth lama. Owner login dan AI Connections tidak memerlukan database SQL atau OAuth lama tersebut.        |
+| `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`                                                        | Storage cloud/layanan pendukung lama yang masih digunakan; tidak memilih provider AI atau akun pemilik.                              |
 
-Variabel `VITE_*` dapat masuk bundle browser, sehingga tidak boleh berisi key atau secret. Deployment Vercel dengan mode terlindungi dan Blob tidak memerlukan database maupun layanan OAuth lama. Jika integrasi lama tersebut diaktifkan, konfigurasinya tetap diperlukan secara terpisah.
+Variabel `VITE_*` dapat masuk bundle browser. Jangan menaruh password, key provider, setup key, session secret, atau master key di sana. Username dan password pemilik dipilih lewat form web, bukan ditulis pada environment atau source code.
 
 ## Perintah proyek
 
@@ -102,15 +115,17 @@ Test adapter yang memakai mock tidak membuktikan semua endpoint/provider nyata k
 
 ## Deployment dan persistensi
 
-Gunakan satu proses server Node dengan disk privat yang dapat ditulis dan bertahan setelah restart. Jalankan `pnpm build` lalu `pnpm start`; bila memakai container atau hosting, arahkan `STUDYOS_DATA_DIR` ke volume persisten milik proses server. Bawa `master.key` dan `connections.json` bersama saat migrasi.
+Untuk server Node dengan disk persisten, jalankan `pnpm build` lalu `pnpm start`. Arahkan `STUDYOS_DATA_DIR` ke volume privat yang tetap tersedia setelah restart. Cadangkan file akun dan koneksi bersama kunci masing-masing.
 
-Untuk Vercel, [api/server.mjs](api/server.mjs) menjalankan backend, sedangkan [vercel.json](vercel.json) mengarahkan API dan halaman SPA. Konfigurasi AI disimpan sebagai satu dokumen terenkripsi pada Blob privat, bukan filesystem function. Pembaruan memakai ETag untuk mencegah perubahan bersamaan antar-instance menimpa satu sama lain. Kunci enkripsi berasal dari environment server yang stabil; konfigurasi cloud yang belum lengkap menghasilkan error, tanpa berpindah diam-diam ke disk sementara.
+Pada Vercel, [api/server.mjs](api/server.mjs) menjalankan backend dan [vercel.json](vercel.json) mengarahkan API serta halaman SPA. Blob privat mempertahankan koneksi AI dan record owner auth sebagai dua dokumen terenkripsi terpisah. Pembaruan memakai ETag/CAS agar request bersamaan tidak menimpa perubahan atau membuat ulang akun yang sudah ada. Secret yang hilang atau storage yang tidak dapat dibaca menghasilkan error; data lama tidak direset.
 
-Siapkan proyek, perlindungan seluruh deployment, Blob privat, dan environment infrastruktur sesuai [panduan Vercel](docs/setup/VERCEL.md). Setelah deployment siap, buka **Profile → AI Connections**, isi URL, protokol, key, dan model provider, lalu simpan serta aktifkan koneksi. Endpoint harus dapat dijangkau dari Vercel: `localhost` atau 9router pada laptop tidak dapat diakses langsung dari deployment.
+Ikuti [panduan Vercel](docs/setup/VERCEL.md): pertahankan perlindungan Vercel untuk seluruh deployment selama migrasi dan pemeriksaan. Setelah owner auth versi terbaru diverifikasi, hanya domain production yang dituju boleh membuka halaman login aplikasi melalui Standard Protection. URL deployment lama yang belum mempunyai owner login harus tetap dilindungi Vercel Authentication; jangan mematikan perlindungan proyek secara global.
 
-Build Vercel membatasi upload frontend ke 3 MB; build lainnya memakai 5 MB. Konfigurasi function menetapkan `maxDuration` 300 detik. Validasi batas platform, streaming, upload, dan izin administrator pada hosting tujuan. Implementasi ini belum menyediakan isolasi koneksi per pengguna untuk layanan multi-user.
+Endpoint AI harus dapat dijangkau dari backend Vercel. `localhost` atau 9router pada laptop tidak dapat diakses langsung dari deployment. Setelah login pemilik, masukkan URL, protokol, key, dan model melalui Profile lalu aktifkan koneksi.
 
-Key AI mengaktifkan fitur AI bila endpoint/model cocok dan kuotanya tersedia. Pencarian **Web** tetap memerlukan `TAVILY_API_KEY`; pencarian **Academic** memakai OpenAlex. Deploy dan konfigurasi AI tidak memindahkan data belajar lama dari browser atau domain lain.
+Build Vercel membatasi upload frontend ke 3 MB; build lainnya memakai 5 MB. Konfigurasi function menetapkan `maxDuration` 300 detik. Keberhasilan build tidak menggantikan pemeriksaan login, penolakan API anonim, streaming, upload, serta provider nyata pada deployment tujuan.
+
+Login ini hanya untuk satu pemilik. Sistem belum menyediakan pendaftaran umum, reset password lewat email, atau isolasi data/koneksi banyak pengguna. Data belajar tetap berada pada browser dan domain masing-masing.
 
 ## Struktur
 
@@ -118,6 +133,7 @@ Key AI mengaktifkan fitur AI bila endpoint/model cocok dan kuotanya tersedia. Pe
 client/src/        Halaman, komponen, state, dan penyimpanan browser
 api/               Entry backend Vercel
 server/ai/        Penyimpanan koneksi, pemeriksaan akses, dan adapter API AI
+server/owner-auth/ Setup, login, sesi, dan penyimpanan satu akun pemilik
 server/           API belajar, impor dokumen, autentikasi, dan storage
 shared/           Kontrak koneksi, konstanta, dan error bersama
 drizzle/          Skema dan riwayat migrasi MySQL

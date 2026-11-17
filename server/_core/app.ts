@@ -6,10 +6,42 @@ import { appRouter } from "../routers";
 import { registerStudyChatStream } from "../studyChatStream";
 import { createContext } from "./context";
 import { isLocalStudyMode } from "../runtimeMode";
+import { TRPCError } from "@trpc/server";
+import { registerOwnerAuthRoutes } from "../owner-auth/routes";
+import { authEnabled, getOwnerSession } from "../owner-auth/service";
 
 /** API only: safe to import in a function without starting a local listener. */
 export async function createApp(): Promise<Express> {
   const app = express();
+
+  // Authentication has its own small parser. Anonymous business requests must
+  // be rejected before the upload parser consumes their potentially large body.
+  registerOwnerAuthRoutes(app);
+  app.use(["/api", "/manus-storage"], async (req, res, next) => {
+    try {
+      if (authEnabled()) {
+        res.setHeader("cache-control", "no-store");
+        const owner = await getOwnerSession(req);
+        if (!owner) {
+          res.status(401).json({
+            error: "Sign in to continue.",
+            code: "OWNER_AUTH_REQUIRED",
+          });
+          return;
+        }
+      }
+      next();
+    } catch (error) {
+      const status =
+        error instanceof TRPCError && error.code === "FORBIDDEN" ? 403 : 503;
+      res.status(status).json({
+        error:
+          status === 403
+            ? "This request is not allowed."
+            : "Owner authentication is unavailable. Please try again later.",
+      });
+    }
+  });
 
   // The hosting platform can impose a smaller request-body limit. Study data
   // and local uploads stay in the browser in the default study mode.
@@ -18,8 +50,10 @@ export async function createApp(): Promise<Express> {
 
   if (!isLocalStudyMode()) {
     registerStorageProxy(app);
-    const { registerOAuthRoutes } = await import("./oauth");
-    registerOAuthRoutes(app);
+    if (!authEnabled()) {
+      const { registerOAuthRoutes } = await import("./oauth");
+      registerOAuthRoutes(app);
+    }
   }
 
   registerStudyChatStream(app);

@@ -1,6 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import type { Request } from "express";
 import { isIP } from "node:net";
+import {
+  authEnabled,
+  getCachedOwnerSession,
+  validateOwnerRequest,
+} from "../owner-auth/service";
 
 function isLoopback(value: string) {
   const address = value.replace(/^\[|\]$/g, "").toLowerCase();
@@ -48,6 +53,14 @@ export function requireAiAccess(
       message: "AI connections are restricted to this app's authorized owner.",
     });
   };
+  if (authEnabled()) {
+    validateOwnerRequest(
+      req,
+      !["GET", "HEAD", "OPTIONS"].includes(req.method ?? "GET")
+    );
+    if (!getCachedOwnerSession(req)) return deny();
+    return;
+  }
   const rawHost = req.headers?.host;
   if (typeof rawHost !== "string" || !rawHost || /[\s,/@?#\\]/.test(rawHost))
     return deny();

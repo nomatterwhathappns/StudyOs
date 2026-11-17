@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
 import { createServer, request as httpRequest } from "node:http";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import { BlobPreconditionFailedError, del, get, put } from "@vercel/blob";
 
 if (process.env.VERCEL !== "1" || process.env.VERCEL_ENV !== "production") {
@@ -21,7 +23,39 @@ assert.equal(
 const key = Buffer.from(process.env.STUDYOS_AI_MASTER_KEY ?? "", "base64");
 assert.equal(key.length, 32, "Cloud encryption key is not configured.");
 assert.equal(process.env.STUDYOS_AI_STORAGE, "vercel-blob");
-assert.equal(process.env.STUDYOS_CLOUD_ACCESS, "vercel-protected");
+assert.equal(
+  process.env.STUDYOS_OWNER_AUTH,
+  "enabled",
+  "Production requires owner authentication."
+);
+assert(
+  (process.env.STUDYOS_OWNER_SESSION_SECRET ?? "").length >= 32,
+  "Owner session encryption is not configured."
+);
+const privateValues = [
+  process.env.STUDYOS_OWNER_SESSION_SECRET,
+  process.env.STUDYOS_OWNER_SETUP_KEY,
+  process.env.STUDYOS_AI_MASTER_KEY,
+  process.env.BLOB_READ_WRITE_TOKEN,
+  process.env.VERCEL_OIDC_TOKEN,
+].filter(value => typeof value === "string" && value.length >= 24);
+async function checkPublicAssets(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const filename = path.join(directory, entry.name);
+    if (entry.isDirectory()) await checkPublicAssets(filename);
+    else if (/\.(?:html|css|js|mjs|json|map)$/.test(entry.name)) {
+      const text = await readFile(filename, "utf8");
+      assert(
+        !privateValues.some(value => text.includes(value)),
+        "A server secret was found in public build output."
+      );
+    }
+  }
+}
+await checkPublicAssets("public");
+console.log(
+  "[StudyOS verification] Public build output contains no server secrets."
+);
 const signal = AbortSignal.timeout(45_000);
 const pathname = `studyos/deployment-checks/${randomUUID()}.json`;
 const encrypt = value => {
@@ -82,65 +116,107 @@ try {
   await del(pathname, { abortSignal: AbortSignal.timeout(15_000) });
 }
 
-// Exercise the exact compiled function with production host validation and
-// storage credentials, inside this trusted build runner on loopback only.
+// Exercise the exact compiled function without creating the real owner's
+// account. The owner chooses credentials later in the private setup form.
 const { default: handler } = await import("../api/server.mjs");
 const localServer = createServer((req, res) => void handler(req, res));
 await new Promise(resolve => localServer.listen(0, "127.0.0.1", resolve));
+const protectedPaths = [
+  ["GET", "/api/trpc/aiConnections.list"],
+  [
+    "GET",
+    "/api/trpc/system.health?input=" +
+      encodeURIComponent(JSON.stringify({ json: { timestamp: 0 } })),
+  ],
+  ["POST", "/api/study/chat-stream"],
+  ["POST", "/api/trpc/study.uploadDocument"],
+  ["GET", "/manus-storage/owner-verification"],
+];
+const checkOwnerBoundary = async (request, label) => {
+  const response = await request("GET", "/api/owner/session");
+  assert.equal(response.status, 200, `${label}: session status unavailable.`);
+  const state = JSON.parse(response.body);
+  assert.equal(state.enabled, true);
+  assert.equal(state.authenticated, false);
+  assert.equal(typeof state.setupRequired, "boolean");
+  assert(!Object.hasOwn(state, "username"));
+  for (const [method, path] of protectedPaths) {
+    const result = await request(method, path);
+    assert.equal(
+      result.status,
+      401,
+      `${label}: anonymous access to ${path} must be denied.`
+    );
+  }
+  const forged = await request("GET", "/api/trpc/aiConnections.list", {
+    cookie: "__Host-studyos_owner=forged-session",
+  });
+  assert.equal(forged.status, 401);
+  // Invalid fields are rejected before reserving a password-attempt slot.
+  // No probe can claim the owner's account or consume provider quota.
+  for (const path of ["/api/owner/setup", "/api/owner/login"]) {
+    const result = await request("POST", path);
+    assert(
+      (path.endsWith("/setup") ? [400, 403, 409] : [400]).includes(
+        result.status
+      ),
+      `${label}: empty authentication input must be rejected.`
+    );
+  }
+  const crossSite = await request("POST", "/api/owner/login", {
+    origin: "https://untrusted.example",
+  });
+  assert.equal(crossSite.status, 403);
+  console.log(
+    `[StudyOS verification] ${label}: owner setup/login boundary, anonymous API denial, forged-cookie rejection, and origin checks passed.`
+  );
+};
 try {
   const host =
     process.env.STUDYOS_PUBLIC_HOSTS?.split(",")[0]?.trim() ||
     process.env.VERCEL_PROJECT_PRODUCTION_URL;
-  assert(host, "Configure the protected production hostname before deploying.");
+  assert(host, "Configure the protected production hostname.");
   const address = localServer.address();
-  // Node fetch intentionally discards a custom Host header. Use the HTTP
-  // client so this private probe reproduces the production ingress hostname.
-  const response = await new Promise((resolve, reject) => {
-    const request = httpRequest(
-      {
-        hostname: "127.0.0.1",
-        port: address.port,
-        path: "/api/trpc/aiConnections.list",
-        headers: {
-          host,
-          origin: `https://${host}`,
-          "sec-fetch-site": "same-origin",
+  const request = async (method, path, headers = {}) =>
+    new Promise((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: "127.0.0.1",
+          port: address.port,
+          path,
+          method,
+          headers: {
+            host,
+            origin: `https://${host}`,
+            "sec-fetch-site": "same-origin",
+            "content-type": "application/json",
+            ...headers,
+          },
+          signal: AbortSignal.timeout(35_000),
         },
-        signal: AbortSignal.timeout(35_000),
-      },
-      response => {
-        const chunks = [];
-        response.on("data", chunk => chunks.push(chunk));
-        response.on("error", reject);
-        response.on("end", () =>
-          resolve({
-            status: response.statusCode,
-            body: Buffer.concat(chunks).toString("utf8"),
-          })
-        );
-      }
-    );
-    request.on("error", reject);
-    request.end();
-  });
-  assert.equal(
-    response.status,
-    200,
-    "Compiled function cannot read private AI settings with the production host configuration."
-  );
-  const result = JSON.parse(response.body);
-  assert(Array.isArray(result.result?.data?.json?.connections));
-  console.log(
-    "[StudyOS verification] Compiled function HTTP, production host access, and private AI settings passed."
-  );
+        res => {
+          const chunks = [];
+          res.on("data", chunk => chunks.push(chunk));
+          res.on("error", reject);
+          res.on("end", () =>
+            resolve({
+              status: res.statusCode,
+              body: Buffer.concat(chunks).toString("utf8"),
+            })
+          );
+        }
+      );
+      req.on("error", reject);
+      req.end(method === "POST" ? "{}" : undefined);
+    });
+  await checkOwnerBoundary(request, "Compiled function");
 } finally {
   localServer.closeAllConnections();
   await new Promise(resolve => localServer.close(resolve));
 }
 
-// An optional existing deployment can be checked with the project's own
-// short-lived production identity. This does not create a public share link or
-// change Deployment Protection / Trusted Sources rules.
+// Optional release check uses the project's short-lived Vercel identity only
+// to cross the platform perimeter. It must NEVER grant an application session.
 if (process.env.STUDYOS_VERIFY_DEPLOYMENT) {
   const base = new URL(process.env.STUDYOS_VERIFY_DEPLOYMENT);
   const allowed = new Set([
@@ -150,150 +226,37 @@ if (process.env.STUDYOS_VERIFY_DEPLOYMENT) {
       []),
   ]);
   assert(
-    base.protocol === "https:" && allowed.has(base.host),
-    "Verification target must be this project's trusted HTTPS hostname."
+    base.protocol === "https:" &&
+      allowed.has(base.host) &&
+      base.pathname === "/" &&
+      !base.search &&
+      !base.hash
   );
-  assert.equal(base.pathname, "/");
-  assert.equal(base.search, "");
-  assert.equal(base.hash, "");
   const token = process.env.VERCEL_OIDC_TOKEN;
   assert(token, "Vercel production identity is unavailable.");
-  const request = async (path, options = {}) => {
+  const request = async (method, path, headers = {}) => {
     const response = await fetch(new URL(path, base), {
-      ...options,
+      method,
       headers: {
-        ...options.headers,
-        "x-vercel-trusted-oidc-idp-token": token,
         origin: base.origin,
+        "content-type": "application/json",
+        "x-vercel-trusted-oidc-idp-token": token,
+        ...headers,
       },
+      ...(method === "POST" ? { body: "{}" } : {}),
       redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
-    assert.equal(
-      response.status,
-      200,
-      `Authenticated deployment check failed for ${path.split("?")[0]} (HTTP ${response.status}); keep protection enabled.`
-    );
-    return response;
+    return { status: response.status, body: await response.text() };
   };
-  const input = encodeURIComponent(JSON.stringify({ json: { timestamp: 0 } }));
-  const health = await (
-    await request(`/api/trpc/system.health?input=${input}`)
-  ).json();
-  assert.equal(health.result?.data?.json?.ok, true);
-  const connections = await (
-    await request("/api/trpc/aiConnections.list")
-  ).json();
-  assert(Array.isArray(connections.result?.data?.json?.connections));
-  for (const connection of connections.result.data.json.connections) {
-    assert(
-      !Object.hasOwn(connection, "apiKey") &&
-        !Object.hasOwn(connection, "extraHeaders")
-    );
-  }
-  // Create only our own temporary, inactive connection. Never edit or activate
-  // an owner's connection, and remove the probe even if a later check fails.
-  if (connections.result.data.json.connections.length < 19) {
-    const name = `Deployment check ${randomUUID()}`;
-    const secret = `verification-only-${randomBytes(16).toString("hex")}`;
-    const header = randomBytes(16).toString("hex");
-    const draft = {
-      name,
-      baseUrl: "https://example.com/v1",
-      model: "verification-only",
-      apiKey: secret,
-      extraHeaders: { "x-studyos-probe": header },
-    };
-    const mutation = async (route, data) =>
-      (
-        await request(`/api/trpc/aiConnections.${route}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ json: data }),
-        })
-      ).json();
-    let id;
-    try {
-      const saved = await mutation("save", draft);
-      id = saved.result?.data?.json?.id;
-      assert(id);
-      assert.equal(saved.result.data.json.keySuffix, secret.slice(-4));
-      const edited = await mutation("save", {
-        ...draft,
-        id,
-        apiKey: "",
-        extraHeaders: undefined,
-      });
-      assert.equal(edited.result?.data?.json?.keySuffix, secret.slice(-4));
-      const listed = await (
-        await request("/api/trpc/aiConnections.list")
-      ).json();
-      const record = listed.result?.data?.json?.connections.find(
-        connection => connection.id === id
-      );
-      assert(
-        record?.hasApiKey && record.headerNames.includes("x-studyos-probe")
-      );
-      assert(
-        !JSON.stringify(listed).includes(secret) &&
-          !JSON.stringify(listed).includes(header)
-      );
-      console.log(
-        "[StudyOS verification] Production connection save, persistence, blank-key preservation, and secret redaction passed."
-      );
-    } finally {
-      // A first save can commit before an interrupted response. Recover the
-      // unique probe identity before cleanup in that case.
-      if (!id) {
-        const listed = await (
-          await request("/api/trpc/aiConnections.list")
-        ).json();
-        id = listed.result?.data?.json?.connections.find(
-          connection => connection.name === name
-        )?.id;
-      }
-      if (id) {
-        await mutation("remove", { id });
-        const listed = await (
-          await request("/api/trpc/aiConnections.list")
-        ).json();
-        assert(
-          !listed.result?.data?.json?.connections.some(
-            connection => connection.id === id
-          )
-        );
-      }
-    }
-  }
+  await checkOwnerBoundary(request, "Production HTTP");
   for (const path of ["/", "/sessions", "/studych"]) {
-    const response = await request(path);
-    assert(response.headers.get("content-type")?.includes("text/html"));
-    assert((await response.text()).includes('id="root"'));
+    const page = await request("GET", path);
+    assert.equal(page.status, 200);
+    assert(page.body.includes('id="root"'));
+    assert(!page.body.includes('id="manus-runtime"'));
   }
-  const { PDFDocument, StandardFonts } = await import("pdf-lib");
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  page.drawText("StudyOS deployment PDF verification", { x: 50, y: 700, font });
-  const document = await (
-    await request("/api/trpc/study.uploadDocument", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        json: {
-          name: "deployment-verification.pdf",
-          mimeType: "application/pdf",
-          dataUrl: `data:application/pdf;base64,${Buffer.from(await pdf.save()).toString("base64")}`,
-        },
-      }),
-    })
-  ).json();
-  assert(
-    document.result?.data?.json?.content?.includes(
-      "StudyOS deployment PDF verification"
-    )
-  );
   console.log(
-    "[StudyOS verification] Authenticated production HTTP routes, health, private AI settings, and PDF import passed."
+    "[StudyOS verification] Production login shell routes passed; Vercel identity alone cannot access owner data."
   );
 }

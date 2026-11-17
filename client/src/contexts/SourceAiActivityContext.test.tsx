@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import React from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { addVocabulary, addMessage, addQuiz, keyTermCallbacks, quizCallbacks, translationCallbacks, translationRequestInputs } = vi.hoisted(() => ({
+const { addVocabulary, addMessage, addQuiz, keyTermCallbacks, vocabularyCallbacks, explainCallbacks, quizCallbacks, translationCallbacks, translationRequestInputs } = vi.hoisted(() => ({
   addVocabulary: vi.fn(),
   addMessage: vi.fn(),
   addQuiz: vi.fn(),
   keyTermCallbacks: { value: undefined as undefined | { onSuccess?: (draft: { term: string; definition: string; context: string; example: string }) => void } },
+  vocabularyCallbacks: { value: undefined as undefined | { onSuccess?: (draft: { term: string; meaning: string }) => void } },
+  explainCallbacks: { value: undefined as undefined | { onSuccess?: (result: { text: string; citations: Array<{ title: string; ordinal: number }>; truncated: boolean }) => void } },
   quizCallbacks: { value: undefined as undefined | { onSuccess?: (result: { questions: Array<{ prompt: string; options: string[]; answer: string }> }) => void } },
   translationCallbacks: { value: undefined as undefined | { onSuccess?: (result: { translations: { english: Array<{ id: string; content: string }>; indonesian: Array<{ id: string; content: string }> } }) => void } },
   translationRequestInputs: [] as Array<{ messages: Array<{ id: string; content: string }> }>,
@@ -16,9 +18,9 @@ const { addVocabulary, addMessage, addQuiz, keyTermCallbacks, quizCallbacks, tra
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     study: {
-      explain: { useMutation: () => ({ mutate: vi.fn(), reset: vi.fn() }) },
+      explain: { useMutation: () => ({ mutate: (_input: unknown, callbacks: typeof explainCallbacks.value) => { explainCallbacks.value = callbacks; }, reset: vi.fn() }) },
       draftKeyTerm: { useMutation: () => ({ mutate: (_input: unknown, callbacks: typeof keyTermCallbacks.value) => { keyTermCallbacks.value = callbacks; }, reset: vi.fn() }) },
-      draftVocabulary: { useMutation: () => ({ mutate: vi.fn(), reset: vi.fn() }) },
+      draftVocabulary: { useMutation: () => ({ mutate: (_input: unknown, callbacks: typeof vocabularyCallbacks.value) => { vocabularyCallbacks.value = callbacks; }, reset: vi.fn() }) },
       quiz: { useMutation: () => ({ mutate: (_input: unknown, callbacks: typeof quizCallbacks.value) => { quizCallbacks.value = callbacks; }, reset: vi.fn() }) },
       translateChat: { useMutation: () => ({ mutate: (input: { messages: Array<{ id: string; content: string }> }, callbacks: typeof translationCallbacks.value) => { translationRequestInputs.push(input); translationCallbacks.value = callbacks; }, reset: vi.fn() }) },
     },
@@ -71,7 +73,16 @@ function TranslationTaskCancel() {
 }
 
 describe("Source AI activity provider", () => {
-  afterEach(() => cleanup());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    keyTermCallbacks.value = undefined;
+    vocabularyCallbacks.value = undefined;
+    explainCallbacks.value = undefined;
+    quizCallbacks.value = undefined;
+    translationCallbacks.value = undefined;
+    translationRequestInputs.length = 0;
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
   it("keeps a Save Terms request and its draft when the Source panel unmounts", () => {
     const ui = render(<SourceAiActivityProvider><SourceTaskStarter visible /><SourceTaskStatus /></SourceAiActivityProvider>);
@@ -173,5 +184,118 @@ describe("Source AI activity provider", () => {
     fireEvent.click(ui.getByRole("button", { name: "Start Save Terms" }));
 
     expect(ui.queryByRole("button", { name: "AI activity" })).toBeNull();
+  });
+
+  it("ignores late quiz, vocabulary, and explanation results after the provider unmounts", () => {
+    function PendingTasks() {
+      const sourceAi = useSourceAiActivity();
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            const request = {
+              sessionId: "session-a",
+              sessionName: "Biology",
+              materials: "Plants use light.",
+              responseStyle: "Balanced" as const,
+              model: "active" as const,
+              selection: "Photosynthesis",
+            };
+            sourceAi.startVocabulary(request);
+            sourceAi.startExplain(request);
+            sourceAi.startQuiz({
+              ...request,
+              quiz: { difficulty: "medium", questionCount: 3, optionCount: 4 },
+            });
+          }}
+        >
+          Start pending tasks
+        </button>
+      );
+    }
+    const ui = render(
+      <SourceAiActivityProvider>
+        <PendingTasks />
+      </SourceAiActivityProvider>
+    );
+    fireEvent.click(ui.getByRole("button", { name: "Start pending tasks" }));
+    expect(addMessage).toHaveBeenCalledTimes(1);
+    ui.unmount();
+
+    act(() => {
+      vocabularyCallbacks.value?.onSuccess?.({
+        term: "Late term",
+        meaning: "Private meaning",
+      });
+      explainCallbacks.value?.onSuccess?.({
+        text: "Late private explanation",
+        citations: [],
+        truncated: false,
+      });
+      quizCallbacks.value?.onSuccess?.({
+        questions: [
+          {
+            prompt: "Late quiz",
+            options: ["Private answer"],
+            answer: "Private answer",
+          },
+        ],
+      });
+    });
+
+    expect(addVocabulary).not.toHaveBeenCalled();
+    expect(addQuiz).not.toHaveBeenCalled();
+    expect(addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not dispatch translations or request another batch after the provider unmounts", () => {
+    function LongTranslation() {
+      const sourceAi = useSourceAiActivity();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            sourceAi.startChatTranslation({
+              sessionId: "session-a",
+              sessionName: "Biology",
+              model: "active",
+              target: "english",
+              messages: Array.from({ length: 7 }, (_, index) => ({
+                id: `private-${index}`,
+                content: `Private text ${index}`,
+              })),
+            })
+          }
+        >
+          Start private translation
+        </button>
+      );
+    }
+    const ui = render(
+      <SourceAiActivityProvider>
+        <LongTranslation />
+      </SourceAiActivityProvider>
+    );
+    fireEvent.click(
+      ui.getByRole("button", { name: "Start private translation" })
+    );
+    expect(translationRequestInputs).toHaveLength(1);
+    ui.unmount();
+    const dispatch = vi.spyOn(window, "dispatchEvent");
+
+    act(() =>
+      translationCallbacks.value?.onSuccess?.({
+        translations: {
+          english: Array.from({ length: 6 }, (_, index) => ({
+            id: `private-${index}`,
+            content: `Late text ${index}`,
+          })),
+          indonesian: [],
+        },
+      })
+    );
+
+    expect(translationRequestInputs).toHaveLength(1);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

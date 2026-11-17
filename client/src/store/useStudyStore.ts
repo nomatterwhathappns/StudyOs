@@ -3,6 +3,11 @@ import { defaultSnapshot, loadStudySnapshot, saveStudySnapshot } from "@/lib/stu
 import { makeId, normalizeTerm, scheduleVocabularyReview } from "@/lib/study-utils";
 import type { Material, Profile, Quiz, StudyMessage, StudyNote, StudySession, StudySnapshot, TimerEntry, VocabItem, VocabReviewRating } from "@/lib/study-types";
 
+// Legacy/local consumers start enabled. The owner gate suspends this store
+// before access is decided and whenever the owner session ends.
+let memorySuspended = false;
+let hydrationEpoch = 0;
+
 type StudyStore = StudySnapshot & {
   hydrated: boolean;
   hydrate: () => Promise<void>;
@@ -48,6 +53,7 @@ function snapshotFrom(state: StudyStore): StudySnapshot {
 
 export const useStudyStore = create<StudyStore>((set, get) => {
   const commit = (recipe: (state: StudyStore) => Partial<StudyStore>) => {
+    if (memorySuspended) return;
     set((current) => {
       const next = { ...current, ...recipe(current) };
       void saveStudySnapshot(snapshotFrom(next));
@@ -59,7 +65,10 @@ export const useStudyStore = create<StudyStore>((set, get) => {
     ...defaultSnapshot,
     hydrated: false,
     hydrate: async () => {
+      if (memorySuspended) return;
+      const epoch = hydrationEpoch;
       const snapshot = await loadStudySnapshot();
+      if (memorySuspended || epoch !== hydrationEpoch) return;
       set({ ...snapshot, hydrated: true });
     },
     updateProfile: (profile) => commit((state) => ({ profile: { ...state.profile, ...profile } })),
@@ -144,3 +153,21 @@ export const useStudyStore = create<StudyStore>((set, get) => {
     })),
   };
 });
+
+/** Clear private memory without changing the browser's saved learning data. */
+export function resetStudyMemory() {
+  memorySuspended = true;
+  hydrationEpoch += 1;
+  useStudyStore.setState({
+    profile: { ...defaultSnapshot.profile },
+    sessions: [],
+    timers: [],
+    activeSessionId: null,
+    hydrated: false,
+  });
+}
+
+/** Allow the authenticated owner (or explicit local legacy mode) to hydrate. */
+export function resumeStudyMemory() {
+  memorySuspended = false;
+}

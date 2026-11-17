@@ -4,6 +4,8 @@ Atur koneksi AI melalui **Profile → AI Connections**. Bagian ini tersedia pada
 
 Koneksi disimpan oleh backend dan dipakai oleh seluruh fitur belajar yang membutuhkan AI. Model selalu ditentukan dari koneksi aktif; tidak ada provider bawaan atau fallback otomatis ke koneksi lain.
 
+Pada deployment dengan owner auth, masuk dahulu memakai username/password pemilik StudyOS. Login ini terpisah dari akun Vercel, dan tidak membuat salinan atau mereset koneksi AI yang sudah tersimpan. Lihat [panduan login pemilik](OWNER_LOGIN.md).
+
 ## Menambahkan dan memilih koneksi
 
 1. Tekan **Add connection**.
@@ -79,15 +81,17 @@ Default direktori data adalah `.studyos/` pada working directory server. `STUDYO
 
 Untuk backup atau migrasi, hentikan server dan salin kedua file sebagai satu pasangan ke lokasi privat milik proses server. Memiliki kedua file memungkinkan pemilik server membaca konfigurasi; jangan membagikan atau commit direktori data. Jika kunci hilang atau file rusak, aplikasi tidak dapat membaca koneksi lama dan tidak meresetnya secara diam-diam.
 
-Akses koneksi pada server lokal dibatasi ke request localhost pada server yang sama atau administrator yang sudah login. Membuka aplikasi lewat alamat LAN, domain, atau reverse proxy tidak otomatis memberikan akses sebagai localhost.
+Saat owner auth aktif, seluruh operasi koneksi dan fitur belajar AI membutuhkan sesi pemilik yang valid. Pada localhost tanpa owner auth, batas akses lokal/admin lama tetap berlaku. Membuka alamat LAN, domain, atau reverse proxy tidak otomatis memberikan sesi pemilik.
 
 Untuk mode disk, gunakan satu proses Node dan disk persisten. Filesystem function Vercel tidak digunakan untuk menyimpan konfigurasi. Pada Vercel, pilih backend **Blob privat** melalui `STUDYOS_AI_STORAGE=vercel-blob`, sediakan `STUDYOS_AI_MASTER_KEY` yang stabil, dan hubungkan kredensial Blob pada server. Dokumen `studyos/ai-connections-v1.json` tetap terenkripsi; pembaruan bersamaan memakai ETag agar perubahan tidak saling menimpa. Kunci yang hilang, berubah, atau tidak cocok tidak menyebabkan konfigurasi lama direset.
 
-Mode Vercel memerlukan **Vercel Authentication untuk seluruh deployment**, serta `STUDYOS_CLOUD_ACCESS=vercel-protected`. Masuklah dengan akun Vercel yang memiliki akses proyek sebelum membuka Profile. Semua pengguna yang diberi akses deployment dapat memakai dan mengubah koneksi bersama itu. Aplikasi tidak menyediakan penyimpanan koneksi terisolasi per akun; jangan memberikan akses deployment kepada orang yang tidak boleh memakai key AI tersebut.
+Pada Vercel, `STUDYOS_OWNER_AUTH=enabled` mewajibkan username/password akun pemilik sebelum membuka Profile atau memakai API. Record login berada pada Blob `studyos/owner-auth-v1.json`, terpisah dari konfigurasi koneksi AI. Menambahkan owner login tidak mengubah dokumen AI maupun master key yang sudah ada. Ini satu akun pemilik; tidak ada isolasi koneksi per pengguna atau pendaftaran umum.
 
-Konfigurasi cloud yang tidak lengkap menghasilkan error dan tidak dialihkan ke disk sementara. Environment production dan preview perlu dipisahkan: secara default, sediakan kredensial koneksi hanya untuk production. Jika preview memerlukan AI, gunakan Blob store dan master key terpisah dari production. Lihat [panduan Vercel](VERCEL.md) untuk setup dan backup.
+Pertahankan Vercel Authentication untuk seluruh deployment selama migrasi. Sesudah gate owner pada versi terbaru diverifikasi, hanya domain production yang dituju boleh menampilkan login aplikasi melalui Standard Protection. URL deployment unik lama tetap harus dilindungi Vercel Authentication. Token bypass platform tidak menggantikan sesi owner, dan perlindungan proyek tidak boleh dimatikan secara global.
 
-Sesi belajar, materi, chat, catatan, kuis, dan riwayat belajar tetap berada di IndexedDB pada browser serta domain masing-masing. Penyimpanan koneksi di cloud tidak menyinkronkan data belajar tersebut.
+Konfigurasi cloud yang tidak lengkap menghasilkan error dan tidak dialihkan ke disk sementara. Environment production dan preview perlu dipisahkan: secara default, sediakan kredensial koneksi hanya untuk production. Jika preview memerlukan AI dan owner login, gunakan Blob store, master key, session secret, serta setup key terpisah dari production. Lihat [panduan Vercel](VERCEL.md) untuk setup dan backup.
+
+Sesi belajar, materi, chat, catatan, kuis, dan riwayat belajar tetap berada di IndexedDB pada browser serta domain masing-masing. Penyimpanan koneksi di cloud tidak menyinkronkan data belajar tersebut. Sign out mencabut sesi, membatalkan request aktif, dan membersihkan state memori tanpa menghapus IndexedDB.
 
 ## Migrasi dari konfigurasi AI lama
 

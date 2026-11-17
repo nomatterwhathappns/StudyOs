@@ -12,6 +12,7 @@ import { useWatchTimer } from "@/contexts/WatchTimerContext";
 import { buildAdaptiveMaterialContext, buildMaterialChunks, materialChunkDomId } from "@/lib/material-context";
 import { trpc } from "@/lib/trpc";
 import { readAiPreferences } from "@/lib/ai-preferences";
+import { fetchProtected } from "@/lib/owner-access";
 import type { Quiz, StudyCitation, StudySession, VocabItem, VocabReviewRating } from "@/lib/study-types";
 import { compactKeyTermText, isVocabularyDue, plainText, scoreQuiz, vocabularyDueAt } from "@/lib/study-utils";
 import { useStudyStore } from "@/store/useStudyStore";
@@ -321,6 +322,7 @@ export function ChatPanel({ session, onNewSession, onOpenDashboard, onOpenSessio
   const aiName = profile.aiName?.trim() || "StudyOS";
   const [input, setInput] = useState(""); const [renaming, setRenaming] = useState(false); const [menuOpen, setMenuOpen] = useState(false); const [error, setError] = useState(""); const [translationError, setTranslationError] = useState(""); const [translationRequestVersion, setTranslationRequestVersion] = useState(0); const [translationProgress, setTranslationProgress] = useState<ChatTranslationProgress | null>(null); const [streaming, setStreaming] = useState(false); const [streamRecovery, setStreamRecovery] = useState(false); const [streamedText, setStreamedText] = useState(""); const [streamProvider, setStreamProvider] = useState("");
   const followLatestRef = useRef(true); const pendingScrollRef = useRef(false); const composerRef = useRef<HTMLTextAreaElement | null>(null); const streamedTextRef = useRef(""); const streamProviderRef = useRef(""); const streamRecoveryRef = useRef(false); const streamAbortRef = useRef<AbortController | null>(null); const chatRunRef = useRef(0); const translationRunRef = useRef(0); const translatingIdsRef = useRef(new Set<string>()); const translationFailuresRef = useRef(new Set<string>());
+  useEffect(() => () => { chatRunRef.current += 1; translationRunRef.current += 1; streamAbortRef.current?.abort(); streamAbortRef.current = null; }, []);
   const [translateChat, setTranslateChat] = useState(false);
   const [translationTarget, setTranslationTarget] = useState<"english" | "indonesian">("english");
   const [translatedMessages, setTranslatedMessages] = useState<ChatTranslationCache>(emptyChatTranslationCache);
@@ -424,7 +426,7 @@ export function ChatPanel({ session, onNewSession, onOpenDashboard, onOpenSessio
     streamAbortRef.current = controller;
     setStreaming(true); setStreamRecovery(false); if (payload.resumePrefix) { setStreamedText(payload.resumePrefix); streamedTextRef.current = payload.resumePrefix; } else { setStreamedText(""); streamedTextRef.current = ""; } setStreamProvider(""); streamProviderRef.current = ""; streamRecoveryRef.current = false;
     try {
-      const response = await fetch("/api/study/chat-stream", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", signal: controller.signal, body: JSON.stringify(payload) });
+      const response = await fetchProtected("/api/study/chat-stream", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", signal: controller.signal, body: JSON.stringify(payload) });
       if (!response.ok || !response.body) throw new Error("Streaming is unavailable.");
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
       let complete = false;

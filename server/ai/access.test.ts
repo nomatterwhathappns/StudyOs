@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Request } from "express";
 import { requireAiAccess } from "./access";
+import { getCachedOwnerSession } from "../owner-auth/service";
+
+vi.mock("../owner-auth/service", async importOriginal => {
+  const actual = await importOriginal<typeof import("../owner-auth/service")>();
+  return { ...actual, getCachedOwnerSession: vi.fn(() => null) };
+});
 
 function request(
   host = "localhost:3000",
@@ -21,9 +27,11 @@ beforeEach(() => {
     "VERCEL_BRANCH_URL",
     "VERCEL_PROJECT_PRODUCTION_URL",
     "STUDYOS_PUBLIC_HOSTS",
+    "STUDYOS_OWNER_AUTH",
   ]) {
     vi.stubEnv(name, undefined);
   }
+  vi.mocked(getCachedOwnerSession).mockReturnValue(null);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -36,6 +44,15 @@ function protectedVercel(overrides: Record<string, string | undefined> = {}) {
   vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "studyos.vercel.app");
   for (const [name, value] of Object.entries(overrides))
     vi.stubEnv(name, value);
+}
+
+function verifiedOwner(overrides: Record<string, string | undefined> = {}) {
+  protectedVercel(overrides);
+  vi.stubEnv("STUDYOS_OWNER_AUTH", "enabled");
+  vi.mocked(getCachedOwnerSession).mockReturnValue({
+    id: "validated-session-fixture",
+    username: "owner",
+  });
 }
 
 describe("AI connection ownership boundary", () => {
@@ -103,30 +120,51 @@ describe("AI connection ownership boundary", () => {
   });
 });
 
-describe("AI access behind Vercel Authentication", () => {
+describe("AI access requires the application owner on Vercel", () => {
   it.each([
     "studyos-deployment.vercel.app",
     "studyos-git-main.vercel.app",
     "studyos.vercel.app",
     "STUDYOS.VERCEL.APP",
     "studyos.vercel.app:443",
-  ])("allows the protected deployment hostname %s", host => {
-    protectedVercel();
+  ])(
+    "rejects a legacy protected deployment hostname without owner authentication: %s",
+    host => {
+      protectedVercel();
+      expect(() =>
+        requireAiAccess(
+          request(host, "192.0.2.10", {
+            origin: `https://${host.toLowerCase().replace(/:443$/, "")}`,
+            "sec-fetch-site": "same-origin",
+          })
+        )
+      ).toThrow();
+    }
+  );
+
+  it("rejects explicitly configured public hosts without owner authentication", () => {
+    protectedVercel({ STUDYOS_PUBLIC_HOSTS: " study.example, other.example " });
+    for (const host of ["study.example", "other.example"]) {
+      expect(() => requireAiAccess(request(host, "192.0.2.10"))).toThrow();
+    }
+  });
+
+  it("allows configured deployment hosts only after the owner session has been validated", () => {
+    verifiedOwner();
     expect(() =>
       requireAiAccess(
-        request(host, "192.0.2.10", {
-          origin: `https://${host.toLowerCase().replace(/:443$/, "")}`,
+        request("studyos.vercel.app", "192.0.2.10", {
+          origin: "https://studyos.vercel.app",
           "sec-fetch-site": "same-origin",
         })
       )
     ).not.toThrow();
-  });
-
-  it("allows explicitly configured protected public hosts", () => {
-    protectedVercel({ STUDYOS_PUBLIC_HOSTS: " study.example, other.example " });
-    for (const host of ["study.example", "other.example"]) {
-      expect(() => requireAiAccess(request(host, "192.0.2.10"))).not.toThrow();
-    }
+    vi.mocked(getCachedOwnerSession).mockReturnValue(null);
+    expect(() =>
+      requireAiAccess(request("studyos.vercel.app", "192.0.2.10"), {
+        role: "admin",
+      })
+    ).toThrow();
   });
 
   it.each([
@@ -142,7 +180,7 @@ describe("AI access behind Vercel Authentication", () => {
   });
 
   it("fails closed when no protected hostname is configured", () => {
-    protectedVercel({
+    verifiedOwner({
       VERCEL_URL: undefined,
       VERCEL_BRANCH_URL: undefined,
       VERCEL_PROJECT_PRODUCTION_URL: undefined,
@@ -164,7 +202,7 @@ describe("AI access behind Vercel Authentication", () => {
     "private.localhost",
     "study.example.",
   ])("fails closed on invalid configured hostnames: %s", host => {
-    protectedVercel({ STUDYOS_PUBLIC_HOSTS: host });
+    verifiedOwner({ STUDYOS_PUBLIC_HOSTS: host });
     expect(() =>
       requireAiAccess(request("studyos.vercel.app", "192.0.2.10"))
     ).toThrow();
@@ -180,7 +218,7 @@ describe("AI access behind Vercel Authentication", () => {
     "studyos.vercel.app@evil.example",
     "studyos.vercel.app/path",
   ])("rejects unprotected or disguised request hosts: %s", host => {
-    protectedVercel();
+    verifiedOwner();
     const req = request(host, "192.0.2.10", {
       "x-forwarded-host": "studyos.vercel.app",
       "x-vercel-id": "spoofed",
@@ -199,7 +237,7 @@ describe("AI access behind Vercel Authentication", () => {
     { "sec-fetch-site": "cross-site" },
     { "sec-fetch-site": "same-site" },
   ])("preserves browser request isolation: %j", headers => {
-    protectedVercel();
+    verifiedOwner();
     expect(() =>
       requireAiAccess(request("studyos.vercel.app", "192.0.2.10", headers))
     ).toThrow();

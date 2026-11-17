@@ -7,9 +7,10 @@ vi.mock("@/lib/study-db", () => ({
 }));
 
 import { defaultSnapshot, loadStudySnapshot, saveStudySnapshot } from "@/lib/study-db";
-import { useStudyStore } from "./useStudyStore";
+import { resetStudyMemory, resumeStudyMemory, useStudyStore } from "./useStudyStore";
 
 beforeEach(() => {
+  resumeStudyMemory();
   useStudyStore.setState({ ...defaultSnapshot, hydrated: false });
   vi.clearAllMocks();
 });
@@ -76,5 +77,105 @@ describe("StudyOS store", () => {
 
     expect(useStudyStore.getState().profile).toEqual({ name: "Alya", avatar: "/manus-storage/studyos/avatars/profile_upload.png" });
     expect(saveStudySnapshot).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.objectContaining({ avatar: "/manus-storage/studyos/avatars/profile_upload.png" }) }));
+  });
+
+  it("clears only in-memory data and blocks hydration and late writes while signed out", async () => {
+    const store = useStudyStore.getState();
+    const sessionId = store.createSession();
+    store.updateProfile({
+      name: "Private owner",
+      avatar: "/private-avatar.png",
+    });
+    store.addTimer({ sessionId, sessionName: "Private session", seconds: 45 });
+    useStudyStore.setState({ hydrated: true });
+    vi.mocked(saveStudySnapshot).mockClear();
+    vi.mocked(loadStudySnapshot).mockClear();
+
+    resetStudyMemory();
+    store.updateProfile({ name: "Late upload result" });
+    store.addMessage(sessionId, {
+      role: "assistant",
+      content: "Late private response",
+    });
+    store.createSession();
+    store.addTimer({ sessionId, sessionName: "Late timer", seconds: 5 });
+    await store.hydrate();
+
+    expect(useStudyStore.getState()).toMatchObject({
+      ...defaultSnapshot,
+      hydrated: false,
+    });
+    expect(saveStudySnapshot).not.toHaveBeenCalled();
+    expect(loadStudySnapshot).not.toHaveBeenCalled();
+  });
+
+  it("ignores hydration started before logout even after a later session resumes", async () => {
+    let finishOldLoad!: (snapshot: typeof defaultSnapshot) => void;
+    vi.mocked(loadStudySnapshot).mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          finishOldLoad = resolve;
+        })
+    );
+    const oldLoad = useStudyStore.getState().hydrate();
+
+    resetStudyMemory();
+    resumeStudyMemory();
+    vi.mocked(loadStudySnapshot).mockResolvedValueOnce({
+      ...defaultSnapshot,
+      profile: { name: "Current owner" },
+    });
+    await useStudyStore.getState().hydrate();
+    finishOldLoad({
+      ...defaultSnapshot,
+      profile: { name: "Stale private snapshot" },
+    });
+    await oldLoad;
+
+    expect(useStudyStore.getState()).toMatchObject({
+      hydrated: true,
+      profile: { name: "Current owner" },
+    });
+    expect(saveStudySnapshot).not.toHaveBeenCalled();
+  });
+
+  it("rehydrates saved learning data and resumes persistence after authentication", async () => {
+    const savedSession = {
+      id: "saved-session",
+      name: "Saved learning",
+      createdAt: 1,
+      isPinned: false,
+      materials: [],
+      chatHistory: [],
+      vocabulary: [],
+      quizzes: [],
+      notes: [],
+      studySeconds: 120,
+    };
+    const diskSnapshot = {
+      ...defaultSnapshot,
+      profile: { name: "Returning owner" },
+      sessions: [savedSession],
+      activeSessionId: savedSession.id,
+    };
+    vi.mocked(loadStudySnapshot).mockResolvedValue(diskSnapshot);
+
+    resetStudyMemory();
+    resumeStudyMemory();
+    await useStudyStore.getState().hydrate();
+
+    expect(useStudyStore.getState()).toMatchObject({
+      ...diskSnapshot,
+      hydrated: true,
+    });
+    expect(saveStudySnapshot).not.toHaveBeenCalled();
+    useStudyStore.getState().updateProfile({ name: "Updated owner" });
+    expect(saveStudySnapshot).toHaveBeenCalledTimes(1);
+    expect(saveStudySnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessions: [savedSession],
+        profile: { name: "Updated owner" },
+      })
+    );
   });
 });
